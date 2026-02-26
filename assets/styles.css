@@ -180,6 +180,26 @@ textarea {
     padding-inline: 20px;
 }
 
+.btn-block {
+    width: 100%;
+}
+
+.btn-accent {
+    color: #05101b;
+    font-weight: 700;
+    border-color: rgba(79, 246, 164, 0.35);
+    background:
+        linear-gradient(135deg, rgba(30, 218, 124, 0.96), rgba(25, 214, 255, 0.92));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        0 10px 22px rgba(21, 153, 255, 0.18);
+}
+
+.btn-accent:hover,
+.btn-accent:focus-visible {
+    border-color: rgba(79, 246, 164, 0.55);
+}
+
 .btn-light {
     background: rgba(248, 252, 255, 0.92);
     color: #09101f;
@@ -205,6 +225,179 @@ textarea {
 
 .dashboard-compact {
     gap: 16px;
+}
+
+.is-auth .app-shell {
+    width: min(560px, calc(100% - 24px));
+    min-height: 100vh;
+    padding: 16px 0 22px;
+    display: grid;
+    align-content: center;
+}
+
+.is-auth .flash-stack {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+}
+
+.auth-screen {
+    min-height: calc(100vh - 38px);
+    display: grid;
+    place-items: center;
+}
+
+.auth-card {
+    position: relative;
+    width: min(430px, 100%);
+    padding: 20px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background:
+        radial-gradient(circle at 15% 0%, rgba(255, 170, 101, 0.12), transparent 42%),
+        radial-gradient(circle at 95% 12%, rgba(32, 194, 255, 0.14), transparent 46%),
+        linear-gradient(180deg, rgba(9, 16, 34, 0.9), rgba(6, 11, 24, 0.92));
+    box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.auth-card-glow {
+    position: absolute;
+    inset: auto;
+    pointer-events: none;
+    width: 260px;
+    height: 260px;
+    top: -90px;
+    right: -70px;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle, rgba(47, 209, 255, 0.22), rgba(47, 209, 255, 0));
+    filter: blur(6px);
+    opacity: 0.9;
+}
+
+.auth-brand-block {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.auth-mark {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background:
+        radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.22), transparent 40%),
+        linear-gradient(145deg, rgba(19, 224, 141, 0.18), rgba(27, 194, 255, 0.18)),
+        rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.auth-mark span {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, #35f29e, #66d7ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.auth-brand-copy {
+    text-align: center;
+}
+
+.auth-brand-copy strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    letter-spacing: -0.03em;
+}
+
+.auth-card-head {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.auth-card-head h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: -0.04em;
+}
+
+.auth-tabs {
+    margin-top: 16px;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.auth-tab {
+    min-height: 38px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 160ms ease, color 160ms ease;
+}
+
+.auth-tab.is-active {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.auth-pane {
+    margin-top: 14px;
+}
+
+.auth-form {
+    gap: 10px;
+}
+
+.auth-form input {
+    min-height: 46px;
+    border-radius: 12px;
+}
+
+.auth-form input:focus {
+    border-color: rgba(55, 228, 155, 0.72);
+    box-shadow: 0 0 0 3px rgba(55, 228, 155, 0.12);
+}
+
+.auth-switch-line {
+    margin: 12px 0 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+
+.auth-inline-link {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #69ddff;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.auth-inline-link:hover,
+.auth-inline-link:focus-visible {
+    color: #9de9ff;
 }
 
 .auth-shell {
