@@ -542,7 +542,7 @@ function allTasks(): array
                     WHEN \'low\' THEN 4
                     ELSE 5
                 END,
-                CASE WHEN t.due_date IS NULL OR t.due_date = \'\' THEN 1 ELSE 0 END,
+                CASE WHEN COALESCE(NULLIF(CAST(t.due_date AS TEXT), \'\'), \'\') = \'\' THEN 1 ELSE 0 END,
                 t.due_date ASC,
                 t.updated_at DESC';
 
