@@ -28,10 +28,16 @@ body {
     font-family: var(--font-ui);
     color: var(--text);
     background:
-        radial-gradient(120vmax 84vmax at -8% -10%, rgba(255, 174, 121, 0.2), transparent 58%),
-        radial-gradient(96vmax 78vmax at 20% 6%, rgba(186, 81, 255, 0.18), transparent 62%),
-        radial-gradient(110vmax 90vmax at 112% 18%, rgba(34, 198, 255, 0.16), transparent 60%),
-        linear-gradient(180deg, #060918 0%, #050814 100%);
+        linear-gradient(
+            132deg,
+            #b67d6f 0%,
+            #9d6f7f 14%,
+            #6f5ca6 32%,
+            #2f3d73 48%,
+            #0a1129 64%,
+            #0b213d 80%,
+            #294c68 100%
+        );
     overflow-x: hidden;
 }
 
@@ -53,11 +59,7 @@ textarea {
 }
 
 .bg-layer {
-    position: fixed;
-    inset: auto;
-    pointer-events: none;
-    z-index: 0;
-    filter: blur(10px);
+    display: none;
 }
 
 .bg-layer-one {
@@ -86,16 +88,7 @@ textarea {
 }
 
 .grain {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.04;
-    background-image:
-        radial-gradient(#fff 0.6px, transparent 0.6px),
-        radial-gradient(#fff 0.6px, transparent 0.6px);
-    background-size: 12px 12px, 16px 16px;
-    background-position: 0 0, 6px 6px;
+    display: none;
 }
 
 .app-shell {
@@ -186,7 +179,7 @@ textarea {
     width: clamp(84px, 8vw, 116px);
     height: auto;
     display: block;
-    filter: invert(1) brightness(1.06);
+    filter: drop-shadow(0 0 10px rgba(44, 199, 255, 0.08));
     opacity: 0.96;
 }
 
@@ -346,7 +339,7 @@ textarea {
     width: min(196px, 66%);
     height: auto;
     display: block;
-    filter: invert(1) brightness(1.06);
+    filter: drop-shadow(0 0 14px rgba(44, 199, 255, 0.12));
     opacity: 0.95;
 }
 
@@ -1366,11 +1359,41 @@ textarea:focus {
     min-width: 0;
 }
 
+.task-group-rename-form {
+    margin: 0;
+    min-width: 0;
+}
+
 .task-group-head h3 {
     margin: 0;
     font-family: var(--font-display);
     font-size: 1rem;
     letter-spacing: -0.02em;
+}
+
+.task-group-name-input {
+    width: min(100%, 360px);
+    max-width: 100%;
+    margin: -4px -6px;
+    padding: 4px 6px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+}
+
+.task-group-name-input:hover {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.task-group-name-input:focus-visible {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.02);
+    outline: none;
 }
 
 .task-group-head-actions {

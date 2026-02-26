@@ -1,6 +1,6 @@
 ﻿<header class="top-nav dashboard-nav">
     <a href="index.php" class="brand" aria-label="WorkForm">
-        <img src="assets/logo-lockup.svg?v=3" alt="WorkForm" class="brand-lockup" width="116" height="29">
+        <img src="assets/WorkForm - Logo (Negativa).svg?v=1" alt="WorkForm" class="brand-lockup" width="116" height="29">
     </a>
     <div class="user-chip">
         <div class="avatar" aria-hidden="true"><?= e(strtoupper(substr((string) $currentUser['name'], 0, 1))) ?></div>
@@ -141,7 +141,27 @@
                         <section class="task-group" aria-labelledby="group-<?= e(md5((string) $groupName)) ?>" data-task-group data-group-name="<?= e((string) $groupName) ?>">
                             <header class="task-group-head">
                                 <div class="task-group-head-main">
-                                    <h3 id="group-<?= e(md5((string) $groupName)) ?>"><?= e((string) $groupName) ?></h3>
+                                    <?php if (mb_strtolower((string) $groupName) !== 'geral'): ?>
+                                        <form method="post" class="task-group-rename-form" data-group-rename-form>
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                            <input type="hidden" name="action" value="rename_group">
+                                            <input type="hidden" name="old_group_name" value="<?= e((string) $groupName) ?>">
+                                            <h3 id="group-<?= e(md5((string) $groupName)) ?>">
+                                                <input
+                                                    type="text"
+                                                    name="new_group_name"
+                                                    value="<?= e((string) $groupName) ?>"
+                                                    maxlength="60"
+                                                    class="task-group-name-input"
+                                                    data-group-name-input
+                                                    aria-label="Nome do grupo"
+                                                    spellcheck="false"
+                                                >
+                                            </h3>
+                                        </form>
+                                    <?php else: ?>
+                                        <h3 id="group-<?= e(md5((string) $groupName)) ?>"><?= e((string) $groupName) ?></h3>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="task-group-head-actions">
                                     <button

@@ -445,6 +445,14 @@ window.addEventListener("DOMContentLoaded", () => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
+    if (target.matches("[data-group-name-input]")) {
+      const renameForm = target.closest("[data-group-rename-form]");
+      if (renameForm instanceof HTMLFormElement) {
+        submitRenameGroup(renameForm).catch(() => {});
+      }
+      return;
+    }
+
     if (target.matches("[data-due-date-input]")) {
       syncDueDateDisplay(target);
     }
@@ -487,6 +495,13 @@ window.addEventListener("DOMContentLoaded", () => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       submitTaskAutosave(form);
+    });
+  });
+
+  document.querySelectorAll("[data-group-rename-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitRenameGroup(form).catch(() => {});
     });
   });
 
@@ -1242,11 +1257,118 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const submitRenameGroup = async (renameForm) => {
+    if (!(renameForm instanceof HTMLFormElement)) return;
+    if (renameForm.dataset.submitting === "1") return;
+
+    const nameInput = renameForm.querySelector("[data-group-name-input]");
+    const oldNameField = renameForm.querySelector('input[name="old_group_name"]');
+    if (!(nameInput instanceof HTMLInputElement) || !(oldNameField instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const previousName = (oldNameField.value || "").trim() || "Geral";
+    const requestedName = (nameInput.value || "").trim();
+    if (!requestedName) {
+      nameInput.value = previousName;
+      return;
+    }
+    if (requestedName === previousName) {
+      return;
+    }
+
+    renameForm.dataset.submitting = "1";
+    try {
+      const data = await postFormJson(renameForm);
+      const oldGroupName = (data.old_group_name || previousName).trim() || previousName;
+      const nextGroupName = (data.group_name || requestedName).trim() || requestedName;
+
+      const groupSection = renameForm.closest("[data-task-group]");
+      const dropzone = groupSection?.querySelector("[data-task-dropzone]");
+
+      if (groupSection instanceof HTMLElement) {
+        groupSection.dataset.groupName = nextGroupName;
+      }
+      if (dropzone instanceof HTMLElement) {
+        dropzone.dataset.groupName = nextGroupName;
+      }
+
+      nameInput.value = nextGroupName;
+      oldNameField.value = nextGroupName;
+
+      const groupAddButtons = groupSection?.querySelectorAll("[data-open-create-task-modal][data-create-group]");
+      groupAddButtons?.forEach((button) => {
+        if (!(button instanceof HTMLElement)) return;
+        button.dataset.createGroup = nextGroupName;
+        button.setAttribute("aria-label", `Criar tarefa no grupo ${nextGroupName}`);
+      });
+
+      const deleteGroupNameField = groupSection?.querySelector(
+        '.task-group-delete-form input[name="group_name"]'
+      );
+      if (deleteGroupNameField instanceof HTMLInputElement) {
+        deleteGroupNameField.value = nextGroupName;
+      }
+      const deleteGroupButton = groupSection?.querySelector("[data-group-delete]");
+      if (deleteGroupButton instanceof HTMLElement) {
+        deleteGroupButton.setAttribute("aria-label", `Excluir grupo ${nextGroupName}`);
+      }
+
+      groupSection?.querySelectorAll("[data-task-item]").forEach((taskItem) => {
+        if (!(taskItem instanceof HTMLElement)) return;
+        taskItem.dataset.groupName = nextGroupName;
+
+        const binding = getTaskGroupField(taskItem);
+        const field = binding?.field;
+        if (!(field instanceof HTMLSelectElement)) return;
+
+        let optionUpdated = false;
+        Array.from(field.options).forEach((option) => {
+          if (option.value === oldGroupName) {
+            option.value = nextGroupName;
+            option.textContent = nextGroupName;
+            optionUpdated = true;
+          }
+        });
+
+        if (!optionUpdated && !Array.from(field.options).some((opt) => opt.value === nextGroupName)) {
+          const option = document.createElement("option");
+          option.value = nextGroupName;
+          option.textContent = nextGroupName;
+          field.append(option);
+        }
+
+        if (field.value === oldGroupName) {
+          field.value = nextGroupName;
+        }
+      });
+
+      if (taskDetailContext?.taskItem instanceof HTMLElement && groupSection?.contains(taskDetailContext.taskItem)) {
+        populateTaskDetailModalFromRow(taskDetailContext);
+      }
+
+      if (typeof syncTaskGroupInputs === "function") {
+        syncTaskGroupInputs();
+      }
+
+      showClientFlash("success", `Grupo renomeado para ${nextGroupName}.`);
+    } catch (error) {
+      nameInput.value = previousName;
+      showClientFlash(
+        "error",
+        error instanceof Error ? error.message : "Falha ao renomear grupo."
+      );
+      throw error;
+    } finally {
+      delete renameForm.dataset.submitting;
+    }
+  };
+
   const collectGroupNames = () => {
     const names = new Set(["Geral"]);
 
-    document.querySelectorAll(".task-group-head h3").forEach((heading) => {
-      const text = heading.textContent?.trim();
+    document.querySelectorAll("[data-task-group]").forEach((section) => {
+      const text = section?.dataset?.groupName?.trim();
       if (text) names.add(text);
     });
 
@@ -1488,6 +1610,13 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (event.key === "Enter" && target instanceof HTMLElement && target.matches("[data-group-name-input]")) {
+      event.preventDefault();
+      target.blur();
+      return;
+    }
+
     if (event.key !== "Escape") return;
 
     if (fabWrap?.classList.contains("is-open")) {

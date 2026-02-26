@@ -119,6 +119,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('success', 'Grupo criado.');
                 redirectTo('index.php#tasks');
 
+            case 'rename_group':
+                $authUser = requireAuth();
+                $oldGroupInput = normalizeTaskGroupName((string) ($_POST['old_group_name'] ?? ''));
+                $newGroupName = normalizeTaskGroupName((string) ($_POST['new_group_name'] ?? ''));
+                $existingOldGroupName = findTaskGroupByName($oldGroupInput);
+
+                if ($existingOldGroupName === null) {
+                    throw new RuntimeException('Grupo nao encontrado.');
+                }
+
+                if (mb_strtolower($existingOldGroupName) === 'geral') {
+                    throw new RuntimeException('O grupo Geral nao pode ser renomeado.');
+                }
+
+                $existingTargetGroupName = findTaskGroupByName($newGroupName);
+                if (
+                    $existingTargetGroupName !== null &&
+                    mb_strtolower($existingTargetGroupName) !== mb_strtolower($existingOldGroupName)
+                ) {
+                    throw new RuntimeException('Ja existe um grupo com este nome.');
+                }
+
+                $taskCountStmt = $pdo->prepare('SELECT COUNT(*) FROM tasks WHERE group_name = :group_name');
+                $taskCountStmt->execute([':group_name' => $existingOldGroupName]);
+                $affectedTaskCount = (int) $taskCountStmt->fetchColumn();
+
+                $pdo->beginTransaction();
+                try {
+                    upsertTaskGroup($pdo, $newGroupName, (int) $authUser['id']);
+
+                    $renameTasksStmt = $pdo->prepare(
+                        'UPDATE tasks
+                         SET group_name = :new_group_name, updated_at = :updated_at
+                         WHERE group_name = :old_group_name'
+                    );
+                    $renameTasksStmt->execute([
+                        ':new_group_name' => $newGroupName,
+                        ':updated_at' => nowIso(),
+                        ':old_group_name' => $existingOldGroupName,
+                    ]);
+
+                    if ($existingOldGroupName !== $newGroupName) {
+                        $deleteOldGroupStmt = $pdo->prepare('DELETE FROM task_groups WHERE name = :name');
+                        $deleteOldGroupStmt->execute([':name' => $existingOldGroupName]);
+                    }
+
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
+
+                if (requestExpectsJson()) {
+                    respondJson([
+                        'ok' => true,
+                        'old_group_name' => $existingOldGroupName,
+                        'group_name' => $newGroupName,
+                        'affected_task_count' => $affectedTaskCount,
+                    ]);
+                }
+
+                flash('success', 'Grupo renomeado.');
+                redirectTo('index.php#tasks');
+
             case 'delete_group':
                 requireAuth();
                 $groupName = normalizeTaskGroupName((string) ($_POST['group_name'] ?? ''));
@@ -346,12 +412,12 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e(APP_NAME) ?></title>
-    <link rel="icon" type="image/svg+xml" href="assets/logo-lockup.svg?v=2">
-    <link rel="shortcut icon" href="assets/logo-lockup.svg?v=2">
+    <link rel="icon" type="image/svg+xml" href="assets/WorkForm - Logo (Negativa).svg?v=1">
+    <link rel="shortcut icon" href="assets/WorkForm - Logo (Negativa).svg?v=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=3">
+    <link rel="stylesheet" href="assets/styles.css?v=4">
     <script src="assets/app.js?v=2" defer></script>
 </head>
 <body class="<?= $currentUser ? 'is-dashboard' : 'is-auth' ?>">
