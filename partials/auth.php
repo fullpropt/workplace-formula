@@ -3,12 +3,7 @@
         <div class="auth-card-glow" aria-hidden="true"></div>
 
         <div class="auth-brand-block">
-            <div class="auth-mark" aria-hidden="true">
-                <img src="assets/logo-mark.svg?v=3" alt="" width="44" height="44">
-            </div>
-            <strong class="brand-wordmark auth-wordmark">
-                <span class="brand-wordmark-main">Workplace</span><span class="brand-wordmark-sub">Formula</span>
-            </strong>
+            <img src="assets/logo-lockup.svg?v=1" alt="WorkForm" class="auth-brand-lockup" width="260" height="88">
         </div>
 
         <div class="auth-card-head">

@@ -94,6 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $status = normalizeTaskStatus((string) ($_POST['status'] ?? 'todo'));
                 $priority = normalizeTaskPriority((string) ($_POST['priority'] ?? 'medium'));
                 $dueDate = dueDateForStorage($_POST['due_date'] ?? null);
+                if ($action === 'create_task' && $dueDate === null) {
+                    $dueDate = (new DateTimeImmutable('today'))->format('Y-m-d');
+                }
                 $groupName = normalizeTaskGroupName((string) ($_POST['group_name'] ?? ''));
                 $existingGroupName = findTaskGroupByName($groupName);
                 if ($existingGroupName !== null) {

@@ -5,7 +5,7 @@ session_start();
 
 date_default_timezone_set('America/Sao_Paulo');
 
-const APP_NAME = 'Workplace Formula';
+const APP_NAME = 'WorkForm';
 const DB_PATH = __DIR__ . '/storage/app.sqlite';
 const REMEMBER_COOKIE_NAME = 'wf_remember';
 const REMEMBER_TOKEN_DAYS = 30;
@@ -999,6 +999,56 @@ function assigneeNamesSummary(array $task): string
     }
 
     return implode(', ', $names);
+}
+
+function taskDueDatePresentation(?string $dueDateValue): array
+{
+    $dueDateValue = trim((string) $dueDateValue);
+
+    if ($dueDateValue === '') {
+        return [
+            'display' => 'Sem prazo',
+            'title' => 'Sem prazo',
+            'is_relative' => false,
+        ];
+    }
+
+    try {
+        $date = new DateTimeImmutable($dueDateValue);
+    } catch (Throwable $e) {
+        return [
+            'display' => $dueDateValue,
+            'title' => $dueDateValue,
+            'is_relative' => false,
+        ];
+    }
+
+    $iso = $date->format('Y-m-d');
+    $fullLabel = $date->format('d/m/Y');
+    $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+    $tomorrow = (new DateTimeImmutable('tomorrow'))->format('Y-m-d');
+
+    if ($iso === $today) {
+        return [
+            'display' => 'Hoje',
+            'title' => 'Hoje (' . $fullLabel . ')',
+            'is_relative' => true,
+        ];
+    }
+
+    if ($iso === $tomorrow) {
+        return [
+            'display' => 'Amanha',
+            'title' => 'Amanha (' . $fullLabel . ')',
+            'is_relative' => true,
+        ];
+    }
+
+    return [
+        'display' => $fullLabel,
+        'title' => $fullLabel,
+        'is_relative' => false,
+    ];
 }
 
 function dashboardStats(array $tasks): array

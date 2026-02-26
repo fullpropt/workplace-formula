@@ -1,0 +1,37 @@
+<svg width="900" height="300" viewBox="0 0 900 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <polygon id="wfHex" points="-14,-12.124 14,-12.124 28,0 14,12.124 -14,12.124 -28,0" />
+    <style>
+      .wf-word {
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: 900;
+        font-size: 122px;
+        letter-spacing: -5px;
+      }
+    </style>
+  </defs>
+
+  <g fill="#000">
+    <g transform="translate(450 68)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(386 108)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(514 108)">
+      <use href="#wfHex" />
+    </g>
+
+    <g transform="translate(386 194)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(450 234)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(514 194)">
+      <use href="#wfHex" />
+    </g>
+
+    <text class="wf-word" x="450" y="187" text-anchor="middle" fill="#000">workform</text>
+  </g>
+</svg>

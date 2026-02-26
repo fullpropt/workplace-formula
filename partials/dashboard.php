@@ -1,10 +1,10 @@
 ﻿<header class="top-nav dashboard-nav">
-    <a href="index.php" class="brand" aria-label="Workplace Formula">
+    <a href="index.php" class="brand" aria-label="WorkForm">
         <span class="brand-icon-wrap" aria-hidden="true">
-            <img src="assets/logo-mark.svg?v=3" alt="" class="brand-icon" width="26" height="26">
+            <img src="assets/logo-mark.svg?v=4" alt="" class="brand-icon" width="26" height="26">
         </span>
         <span class="brand-wordmark">
-            <span class="brand-wordmark-main">Workplace</span><span class="brand-wordmark-sub">Formula</span>
+            <span class="brand-wordmark-main">Work</span><span class="brand-wordmark-sub">Form</span>
         </span>
     </a>
     <nav class="nav-links" aria-label="Navegação do dashboard">
@@ -148,7 +148,16 @@
 
                             <div class="task-list-rows">
                                 <?php if (!$groupTasks): ?>
-                                    <div class="task-group-empty-row">Sem tarefas neste grupo.</div>
+                                    <div class="task-group-empty-row">
+                                        <button
+                                            type="button"
+                                            class="task-group-empty-add"
+                                            data-open-create-task-modal
+                                            data-create-group="<?= e((string) $groupName) ?>"
+                                            aria-label="Criar tarefa no grupo <?= e((string) $groupName) ?>"
+                                            title="Criar tarefa"
+                                        >+</button>
+                                    </div>
                                 <?php endif; ?>
                                 <?php foreach ($groupTasks as $task): ?>
                                     <?php
@@ -157,7 +166,7 @@
                                     $statusKey = normalizeTaskStatus((string) $task['status']);
                                     $assigneeSummary = assigneeNamesSummary($task);
                                     $dueDateValue = (string) ($task['due_date'] ?? '');
-                                    $dueDateLabel = $dueDateValue !== '' ? (new DateTimeImmutable($dueDateValue))->format('d/m/Y') : 'Sem prazo';
+                                    $dueDateUi = taskDueDatePresentation($dueDateValue);
                                     ?>
                                     <article class="task-list-item" id="task-<?= e((string) $taskId) ?>" data-task-item>
                                         <form method="post" class="task-list-form" id="update-task-<?= e((string) $taskId) ?>" data-task-autosave-form>
@@ -220,10 +229,23 @@
                                                     </details>
                                                 </div>
 
-                                                <label class="tag-field due-tag-field" title="<?= e($dueDateLabel) ?>">
+                                                <div class="tag-field due-tag-field" title="<?= e((string) $dueDateUi['title']) ?>">
                                                     <span class="sr-only">Prazo</span>
-                                                    <input type="date" name="due_date" value="<?= e($dueDateValue) ?>" class="due-date-input">
-                                                </label>
+                                                    <button
+                                                        type="button"
+                                                        class="due-date-display<?= !empty($dueDateUi['is_relative']) ? ' is-relative' : '' ?>"
+                                                        data-due-date-display
+                                                        aria-label="Prazo: <?= e((string) $dueDateUi['title']) ?>"
+                                                        title="<?= e((string) $dueDateUi['title']) ?>"
+                                                    ><?= e((string) $dueDateUi['display']) ?></button>
+                                                    <input
+                                                        type="date"
+                                                        name="due_date"
+                                                        value="<?= e($dueDateValue) ?>"
+                                                        class="due-date-input due-date-input-overlay"
+                                                        data-due-date-input
+                                                    >
+                                                </div>
 
                                                 <button
                                                     type="button"
@@ -335,7 +357,13 @@
 
             <label>
                 <span>Grupo</span>
-                <input type="text" name="group_name" list="task-group-options" value="Geral" data-create-task-group-input>
+                <select name="group_name" data-create-task-group-input>
+                    <?php foreach ($taskGroups as $groupNameOption): ?>
+                        <option value="<?= e((string) $groupNameOption) ?>"<?= (string) $groupNameOption === 'Geral' ? ' selected' : '' ?>>
+                            <?= e((string) $groupNameOption) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </label>
 
             <div class="form-row">
@@ -361,7 +389,7 @@
             <div class="form-row">
                 <label>
                     <span>Prazo</span>
-                    <input type="date" name="due_date">
+                    <input type="date" name="due_date" value="<?= e((new DateTimeImmutable('today'))->format('Y-m-d')) ?>">
                 </label>
 
                 <div class="assignee-picker-wrap">

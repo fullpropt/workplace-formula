@@ -150,7 +150,10 @@ textarea {
     width: 100%;
     height: 100%;
     display: block;
-    filter: drop-shadow(0 0 8px rgba(44, 199, 255, 0.14));
+    filter:
+        invert(1)
+        brightness(1.05)
+        drop-shadow(0 0 8px rgba(44, 199, 255, 0.14));
 }
 
 .brand-wordmark {
@@ -324,6 +327,14 @@ textarea {
     margin: 4px 0 0;
     padding: 4px 0;
     text-align: center;
+}
+
+.auth-brand-lockup {
+    width: min(240px, 78%);
+    height: auto;
+    display: block;
+    filter: invert(1) brightness(1.06);
+    opacity: 0.95;
 }
 
 .auth-mark {
@@ -1416,7 +1427,8 @@ textarea:focus {
 }
 
 .tag-select,
-.due-date-input {
+.due-date-input,
+.due-date-display {
     min-height: 34px;
     border-radius: 999px;
     padding: 6px 10px;
@@ -1428,6 +1440,64 @@ textarea:focus {
 .tag-select {
     width: 100%;
     appearance: none;
+    cursor: pointer;
+}
+
+.due-tag-field {
+    position: relative;
+}
+
+.due-date-display {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.86);
+    position: relative;
+}
+
+.due-date-display::after {
+    content: "";
+    margin-left: auto;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -2px 0 rgba(255, 255, 255, 0.04);
+    opacity: 0.7;
+}
+
+.due-date-display.is-relative {
+    color: #d8f4ff;
+    border-color: rgba(97, 202, 255, 0.2);
+    background: rgba(60, 173, 255, 0.07);
+}
+
+.due-date-display:hover,
+.due-date-display:focus-visible {
+    border-color: rgba(120, 204, 255, 0.36);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.due-date-input-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+    pointer-events: none;
+    padding: 0;
+    min-height: 34px;
+}
+
+.due-date-input-overlay::-webkit-calendar-picker-indicator {
+    width: 100%;
+    height: 100%;
+    margin: 0;
     cursor: pointer;
 }
 
@@ -1668,9 +1738,32 @@ textarea:focus {
     background: rgba(255, 255, 255, 0.015);
     display: flex;
     align-items: center;
-    padding: 0 12px;
-    color: rgba(255, 255, 255, 0.56);
-    font-size: 0.84rem;
+    justify-content: center;
+    padding: 6px 12px;
+}
+
+.task-group-empty-add {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.02);
+    color: rgba(255, 255, 255, 0.78);
+    display: grid;
+    place-items: center;
+    padding: 0;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.task-group-empty-add:hover,
+.task-group-empty-add:focus-visible {
+    color: var(--text);
+    border-color: rgba(44, 199, 255, 0.22);
+    background: rgba(44, 199, 255, 0.06);
+    transform: translateY(-1px);
 }
 
 .task-fab-stack {

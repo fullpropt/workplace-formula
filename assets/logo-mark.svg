@@ -1,30 +1,27 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="wfMarkGrad" x1="24" y1="24" x2="102" y2="104" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2CE58D"/>
-      <stop offset="1" stop-color="#2CC7FF"/>
-    </linearGradient>
+    <polygon id="wfHex" points="-14,-12.124 14,-12.124 28,0 14,12.124 -14,12.124 -28,0" />
   </defs>
 
-  <circle
-    cx="64"
-    cy="64"
-    r="39"
-    stroke="url(#wfMarkGrad)"
-    stroke-width="8"
-    stroke-linecap="round"
-    stroke-dasharray="172 80"
-    transform="rotate(-20 64 64)"
-    opacity="0.9"
-  />
+  <g fill="#000">
+    <g transform="translate(64 18)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(32 38)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(96 38)">
+      <use href="#wfHex" />
+    </g>
 
-  <path
-    d="M43 67.5L57.5 82L86 49.5"
-    stroke="url(#wfMarkGrad)"
-    stroke-width="8"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-
-  <circle cx="92.5" cy="36.5" r="4.5" fill="url(#wfMarkGrad)"/>
+    <g transform="translate(32 90)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(64 110)">
+      <use href="#wfHex" />
+    </g>
+    <g transform="translate(96 90)">
+      <use href="#wfHex" />
+    </g>
+  </g>
 </svg>

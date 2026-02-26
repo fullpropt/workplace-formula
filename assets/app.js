@@ -86,6 +86,77 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  const toLocalIsoDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const dueDateMeta = (value) => {
+    const raw = (value || "").trim();
+    if (!raw) {
+      return {
+        display: "Sem prazo",
+        title: "Sem prazo",
+        isRelative: false,
+      };
+    }
+
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayIso = toLocalIsoDate(today);
+    const tomorrowIso = toLocalIsoDate(tomorrow);
+
+    let formatted = raw;
+    const parsed = new Date(`${raw}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) {
+      formatted = parsed.toLocaleDateString("pt-BR");
+    }
+
+    if (raw === todayIso) {
+      return {
+        display: "Hoje",
+        title: `Hoje (${formatted})`,
+        isRelative: true,
+      };
+    }
+
+    if (raw === tomorrowIso) {
+      return {
+        display: "Amanha",
+        title: `Amanha (${formatted})`,
+        isRelative: true,
+      };
+    }
+
+    return {
+      display: formatted,
+      title: formatted,
+      isRelative: false,
+    };
+  };
+
+  const syncDueDateDisplay = (input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const wrap = input.closest(".due-tag-field");
+    const display = wrap?.querySelector("[data-due-date-display]");
+    if (!(display instanceof HTMLElement)) return;
+
+    const meta = dueDateMeta(input.value);
+    display.textContent = meta.display;
+    display.setAttribute("title", meta.title);
+    display.setAttribute("aria-label", `Prazo: ${meta.title}`);
+    display.classList.toggle("is-relative", meta.isRelative);
+    if (wrap) wrap.setAttribute("title", meta.title);
+  };
+
+  document.querySelectorAll("[data-due-date-input]").forEach((input) => {
+    syncDueDateDisplay(input);
+  });
+
   const updateAssigneePickerSummary = (details) => {
     const summary = details.querySelector("summary");
     if (!summary) return;
@@ -148,6 +219,10 @@ window.addEventListener("DOMContentLoaded", () => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
+    if (target.matches("[data-due-date-input]")) {
+      syncDueDateDisplay(target);
+    }
+
     const form = target.closest("[data-task-autosave-form]");
     if (!form) return;
 
@@ -176,6 +251,21 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.addEventListener("click", (event) => {
+    const dueDisplay = event.target.closest("[data-due-date-display]");
+    if (dueDisplay) {
+      const wrap = dueDisplay.closest(".due-tag-field");
+      const input = wrap?.querySelector("[data-due-date-input]");
+      if (input instanceof HTMLInputElement) {
+        if (typeof input.showPicker === "function") {
+          input.showPicker();
+        } else {
+          input.focus();
+          input.click();
+        }
+      }
+      return;
+    }
+
     const toggleButton = event.target.closest("[data-task-expand]");
     if (!toggleButton) return;
 
@@ -199,6 +289,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const fabWrap = document.querySelector("[data-task-fab-wrap]");
   const fabToggleButton = document.querySelector("[data-task-fab-toggle]");
   const fabMenu = document.querySelector("[data-task-fab-menu]");
+  const taskGroupsDatalist = document.querySelector("#task-group-options");
 
   const setFabMenuOpen = (open) => {
     if (!fabWrap || !fabToggleButton || !fabMenu) return;
@@ -215,9 +306,79 @@ window.addEventListener("DOMContentLoaded", () => {
   const createGroupNameInput = document.querySelector("[data-create-group-name-input]");
   const createGroupForm = document.querySelector("[data-create-group-form]");
 
+  const collectGroupNames = () => {
+    const names = new Set(["Geral"]);
+
+    document.querySelectorAll(".task-group-head h3").forEach((heading) => {
+      const text = heading.textContent?.trim();
+      if (text) names.add(text);
+    });
+
+    if (
+      createTaskGroupInput &&
+      createTaskGroupInput instanceof HTMLSelectElement
+    ) {
+      Array.from(createTaskGroupInput.options).forEach((option) => {
+        const text = option.value?.trim();
+        if (text) names.add(text);
+      });
+    }
+
+    return Array.from(names).sort((a, b) =>
+      a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+    );
+  };
+
+  const syncTaskGroupInputs = () => {
+    const groupNames = collectGroupNames();
+
+    if (
+      createTaskGroupInput &&
+      createTaskGroupInput instanceof HTMLSelectElement
+    ) {
+      const currentValue = createTaskGroupInput.value;
+      createTaskGroupInput.innerHTML = "";
+
+      groupNames.forEach((groupName) => {
+        const option = document.createElement("option");
+        option.value = groupName;
+        option.textContent = groupName;
+        if (groupName === currentValue) option.selected = true;
+        createTaskGroupInput.append(option);
+      });
+
+      if (
+        currentValue &&
+        !groupNames.some((name) => name === currentValue)
+      ) {
+        const option = document.createElement("option");
+        option.value = currentValue;
+        option.textContent = currentValue;
+        option.selected = true;
+        createTaskGroupInput.append(option);
+      }
+
+      if (!createTaskGroupInput.value && createTaskGroupInput.options.length) {
+        createTaskGroupInput.value = "Geral";
+      }
+    }
+
+    if (taskGroupsDatalist) {
+      taskGroupsDatalist.innerHTML = "";
+      groupNames.forEach((groupName) => {
+        const option = document.createElement("option");
+        option.value = groupName;
+        taskGroupsDatalist.append(option);
+      });
+    }
+  };
+
+  syncTaskGroupInputs();
+
   const openCreateModal = (groupName) => {
     if (!createTaskModal) return;
     setFabMenuOpen(false);
+    syncTaskGroupInputs();
     if (createTaskForm) {
       createTaskForm.reset();
       createTaskForm
@@ -225,7 +386,19 @@ window.addEventListener("DOMContentLoaded", () => {
         .forEach(updateAssigneePickerSummary);
     }
     if (createTaskGroupInput) {
-      createTaskGroupInput.value = (groupName || "").trim() || "Geral";
+      const nextGroup = (groupName || "").trim() || "Geral";
+      if (
+        createTaskGroupInput instanceof HTMLSelectElement &&
+        !Array.from(createTaskGroupInput.options).some(
+          (option) => option.value === nextGroup
+        )
+      ) {
+        const option = document.createElement("option");
+        option.value = nextGroup;
+        option.textContent = nextGroup;
+        createTaskGroupInput.append(option);
+      }
+      createTaskGroupInput.value = nextGroup;
     }
     createTaskModal.hidden = false;
     document.body.classList.add("modal-open");
