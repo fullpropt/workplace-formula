@@ -199,6 +199,83 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const syncTaskItemOverlayState = (detailsEl) => {
+    const taskItem = detailsEl?.closest?.("[data-task-item]");
+    if (!(taskItem instanceof HTMLElement)) return;
+
+    const hasOpenOverlay = Boolean(
+      taskItem.querySelector('details[open].assignee-picker, details[open][data-inline-select-picker]')
+    );
+    taskItem.classList.toggle("has-open-overlay", hasOpenOverlay);
+  };
+
+  const closeSiblingTaskOverlays = (detailsEl) => {
+    const taskItem = detailsEl?.closest?.("[data-task-item]");
+    if (!(taskItem instanceof HTMLElement)) return;
+
+    taskItem
+      .querySelectorAll('details[open].assignee-picker, details[open][data-inline-select-picker]')
+      .forEach((item) => {
+        if (item === detailsEl) return;
+        item.open = false;
+      });
+  };
+
+  const syncInlineSelectPicker = (select) => {
+    if (!(select instanceof HTMLSelectElement)) return;
+    if (!select.matches("[data-inline-select-source]")) return;
+
+    const wrap = select.closest("[data-inline-select-wrap]");
+    if (!(wrap instanceof HTMLElement)) return;
+
+    const details = wrap.querySelector("[data-inline-select-picker]");
+    const summaryText = wrap.querySelector("[data-inline-select-text]");
+    const optionButtons = Array.from(
+      wrap.querySelectorAll("[data-inline-select-option]")
+    ).filter((button) => button instanceof HTMLButtonElement);
+
+    let selectedLabel = "";
+
+    optionButtons.forEach((button) => {
+      const active = (button.dataset.value || "") === (select.value || "");
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      if (active) {
+        selectedLabel =
+          (button.dataset.label || "").trim() ||
+          button.textContent?.trim() ||
+          "";
+      }
+    });
+
+    if (!selectedLabel) {
+      const selectedOption = select.options[select.selectedIndex];
+      selectedLabel = selectedOption?.textContent?.trim() || "";
+    }
+
+    if (summaryText instanceof HTMLElement) {
+      summaryText.textContent = selectedLabel;
+    }
+
+    if (details instanceof HTMLElement) {
+      Array.from(details.classList).forEach((className) => {
+        if (
+          (className.startsWith("status-") && className !== "status-inline-picker") ||
+          (className.startsWith("priority-") && className !== "priority-inline-picker")
+        ) {
+          details.classList.remove(className);
+        }
+      });
+
+      if (select.classList.contains("status-select") && select.value) {
+        details.classList.add(`status-${select.value}`);
+      }
+      if (select.classList.contains("priority-select") && select.value) {
+        details.classList.add(`priority-${select.value}`);
+      }
+    }
+  };
+
   const syncSelectColor = (select) => {
     if (!select) return;
 
@@ -211,6 +288,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if (select.value) select.classList.add(`status-${select.value}`);
       syncStatusStepper(select);
       syncTaskRowStatusOverlay(select);
+      syncInlineSelectPicker(select);
     }
 
     if (select.classList.contains("priority-select")) {
@@ -220,6 +298,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       });
       if (select.value) select.classList.add(`priority-${select.value}`);
+      syncInlineSelectPicker(select);
     }
   };
 
@@ -453,6 +532,22 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".assignee-picker").forEach((details) => {
     updateAssigneePickerSummary(details);
   });
+
+  document
+    .querySelectorAll("[data-inline-select-source]")
+    .forEach((select) => syncInlineSelectPicker(select));
+
+  document
+    .querySelectorAll('.assignee-picker, [data-inline-select-picker]')
+    .forEach((details) => {
+      if (!(details instanceof HTMLDetailsElement)) return;
+      details.addEventListener("toggle", () => {
+        if (details.open) {
+          closeSiblingTaskOverlays(details);
+        }
+        syncTaskItemOverlayState(details);
+      });
+    });
 
   document.addEventListener("change", (event) => {
     const checkbox = event.target.closest('.assignee-picker input[type="checkbox"]');
@@ -954,6 +1049,31 @@ window.addEventListener("DOMContentLoaded", () => {
       statusSelect.selectedIndex = nextIndex;
       syncSelectColor(statusSelect);
       statusSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+
+    const inlineSelectOption = event.target.closest("[data-inline-select-option]");
+    if (inlineSelectOption) {
+      const wrap = inlineSelectOption.closest("[data-inline-select-wrap]");
+      const details = inlineSelectOption.closest("[data-inline-select-picker]");
+      const select = wrap?.querySelector("select[data-inline-select-source]");
+      const nextValue = (inlineSelectOption.dataset.value || "").trim();
+
+      if (!(select instanceof HTMLSelectElement) || !nextValue) {
+        return;
+      }
+
+      const changed = select.value !== nextValue;
+      select.value = nextValue;
+      syncSelectColor(select);
+
+      if (details instanceof HTMLDetailsElement) {
+        details.open = false;
+      }
+
+      if (changed) {
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       return;
     }
 

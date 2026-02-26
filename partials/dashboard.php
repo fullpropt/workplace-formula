@@ -254,16 +254,33 @@
                                                         <span aria-hidden="true">‹</span>
                                                     </button>
 
-                                                    <label class="tag-field tag-field-status">
-                                                        <span class="sr-only">Status</span>
-                                                        <select name="status" class="tag-select status-select status-<?= e($statusKey) ?>">
+                                                    <div class="tag-field tag-field-status row-inline-picker-wrap" data-inline-select-wrap>
+                                                        <details class="row-inline-picker status-inline-picker status-<?= e($statusKey) ?>" data-inline-select-picker>
+                                                            <summary aria-label="Status da tarefa">
+                                                                <span class="row-inline-picker-summary-text" data-inline-select-text><?= e((string) ($statusOptions[$statusKey] ?? 'Backlog')) ?></span>
+                                                            </summary>
+                                                            <div class="assignee-picker-menu row-inline-picker-menu" role="listbox" aria-label="Selecionar status">
+                                                                <?php foreach ($statusOptions as $optionKey => $optionLabel): ?>
+                                                                    <button
+                                                                        type="button"
+                                                                        class="row-inline-picker-option status-<?= e($optionKey) ?><?= $optionKey === $statusKey ? ' is-active' : '' ?>"
+                                                                        data-inline-select-option
+                                                                        data-value="<?= e($optionKey) ?>"
+                                                                        data-label="<?= e($optionLabel) ?>"
+                                                                        role="option"
+                                                                        aria-selected="<?= $optionKey === $statusKey ? 'true' : 'false' ?>"
+                                                                    ><?= e($optionLabel) ?></button>
+                                                                <?php endforeach; ?>
+                                                            </div>
+                                                        </details>
+                                                        <select name="status" class="tag-select status-select status-<?= e($statusKey) ?> row-inline-picker-native" data-inline-select-source hidden>
                                                             <?php foreach ($statusOptions as $optionKey => $optionLabel): ?>
                                                                 <option value="<?= e($optionKey) ?>"<?= $optionKey === $statusKey ? ' selected' : '' ?>>
                                                                     <?= e($optionLabel) ?>
                                                                 </option>
                                                             <?php endforeach; ?>
                                                         </select>
-                                                    </label>
+                                                    </div>
 
                                                     <button
                                                         type="button"
@@ -275,16 +292,37 @@
                                                     </button>
                                                 </div>
 
-                                                <label class="tag-field tag-field-priority">
-                                                    <span class="sr-only">Prioridade</span>
-                                                    <select name="priority" class="tag-select priority-select priority-<?= e($priorityKey) ?>">
+                                                <div class="tag-field tag-field-priority row-inline-picker-wrap" data-inline-select-wrap data-inline-picker-kind="priority">
+                                                    <details class="row-inline-picker priority-inline-picker priority-<?= e($priorityKey) ?>" data-inline-select-picker>
+                                                        <summary aria-label="Prioridade da tarefa">
+                                                            <span class="row-inline-picker-summary-icon" aria-hidden="true">&#9873;</span>
+                                                            <span class="row-inline-picker-summary-text sr-only" data-inline-select-text><?= e((string) ($priorityOptions[$priorityKey] ?? 'Media')) ?></span>
+                                                        </summary>
+                                                        <div class="assignee-picker-menu row-inline-picker-menu" role="listbox" aria-label="Selecionar prioridade">
+                                                            <?php foreach ($priorityOptions as $optionKey => $optionLabel): ?>
+                                                                <button
+                                                                    type="button"
+                                                                    class="row-inline-picker-option priority-<?= e($optionKey) ?><?= $optionKey === $priorityKey ? ' is-active' : '' ?>"
+                                                                    data-inline-select-option
+                                                                    data-value="<?= e($optionKey) ?>"
+                                                                    data-label="<?= e($optionLabel) ?>"
+                                                                    role="option"
+                                                                    aria-selected="<?= $optionKey === $priorityKey ? 'true' : 'false' ?>"
+                                                                >
+                                                                    <span class="row-inline-picker-option-flag" aria-hidden="true">&#9873;</span>
+                                                                    <span><?= e($optionLabel) ?></span>
+                                                                </button>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                    </details>
+                                                    <select name="priority" class="tag-select priority-select priority-<?= e($priorityKey) ?> row-inline-picker-native" data-inline-select-source hidden>
                                                         <?php foreach ($priorityOptions as $optionKey => $optionLabel): ?>
                                                             <option value="<?= e($optionKey) ?>"<?= $optionKey === $priorityKey ? ' selected' : '' ?>>
                                                                 &#9873;
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
-                                                </label>
+                                                </div>
 
                                                 <div class="tag-field assignee-tag-field">
                                                     <details class="assignee-picker row-assignee-picker">
@@ -586,24 +624,58 @@
                         <input type="text" maxlength="140" required data-task-detail-edit-title>
                     </label>
 
-                    <div class="form-row">
-                        <label>
-                            <span>Status</span>
-                            <select class="tag-select status-select" data-task-detail-edit-status>
-                                <?php foreach ($statusOptions as $key => $label): ?>
-                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
+                    <div class="task-detail-inline-controls">
+                        <div class="assignee-picker-wrap task-detail-inline-field task-detail-inline-assignees">
+                            <span class="assignee-picker-label">Responsaveis</span>
+                            <details class="assignee-picker task-detail-inline-assignee-picker" data-task-detail-edit-assignees>
+                                <summary>Selecionar</summary>
+                                <div class="assignee-picker-menu" data-task-detail-edit-assignees-menu></div>
+                            </details>
+                        </div>
 
-                        <label>
+                        <div class="task-detail-inline-field task-detail-inline-status">
+                            <span>Status</span>
+                            <div class="status-stepper task-detail-status-stepper" data-status-stepper>
+                                <button
+                                    type="button"
+                                    class="status-stepper-btn"
+                                    data-status-step="-1"
+                                    aria-label="Status anterior"
+                                >
+                                    <span aria-hidden="true">‹</span>
+                                </button>
+
+                                <label class="tag-field tag-field-status">
+                                    <span class="sr-only">Status</span>
+                                    <select class="tag-select status-select" data-task-detail-edit-status>
+                                        <?php foreach ($statusOptions as $key => $label): ?>
+                                            <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+
+                                <button
+                                    type="button"
+                                    class="status-stepper-btn"
+                                    data-status-step="1"
+                                    aria-label="Proximo status"
+                                >
+                                    <span aria-hidden="true">›</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="task-detail-inline-field task-detail-inline-priority">
                             <span>Prioridade</span>
-                            <select class="tag-select priority-select" data-task-detail-edit-priority>
-                                <?php foreach ($priorityOptions as $key => $label): ?>
-                                    <option value="<?= e($key) ?>">&#9873;</option>
-                                <?php endforeach; ?>
-                            </select>
-                        </label>
+                            <label class="tag-field">
+                                <span class="sr-only">Prioridade</span>
+                                <select class="tag-select priority-select" data-task-detail-edit-priority>
+                                    <?php foreach ($priorityOptions as $key => $label): ?>
+                                        <option value="<?= e($key) ?>">&#9873;</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -616,14 +688,6 @@
                             <span>Prazo</span>
                             <input type="date" data-task-detail-edit-due-date>
                         </label>
-                    </div>
-
-                    <div class="assignee-picker-wrap">
-                        <span class="assignee-picker-label">Responsaveis</span>
-                        <details class="assignee-picker" data-task-detail-edit-assignees>
-                            <summary>Selecionar</summary>
-                            <div class="assignee-picker-menu" data-task-detail-edit-assignees-menu></div>
-                        </details>
                     </div>
 
                     <label>
