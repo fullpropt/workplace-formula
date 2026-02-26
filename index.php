@@ -37,14 +37,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Este e-mail já está cadastrado.');
                 }
 
-                $_SESSION['user_id'] = createUser(
+                $newUserId = createUser(
                     $pdo,
                     $name,
                     $email,
                     password_hash($password, PASSWORD_DEFAULT),
                     nowIso()
                 );
-                session_regenerate_id(true);
+                loginUser($newUserId, true);
                 flash('success', 'Conta criada com sucesso.');
                 redirectTo('index.php');
 
@@ -62,14 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Credenciais inválidas.');
                 }
 
-                $_SESSION['user_id'] = (int) $userRow['id'];
-                session_regenerate_id(true);
+                loginUser((int) $userRow['id'], true);
                 flash('success', 'Login realizado.');
                 redirectTo('index.php');
 
             case 'logout':
-                unset($_SESSION['user_id']);
-                session_regenerate_id(true);
+                logoutUser();
                 flash('success', 'Sessão encerrada.');
                 redirectTo('index.php');
 

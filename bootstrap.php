@@ -7,6 +7,8 @@ date_default_timezone_set('America/Sao_Paulo');
 
 const APP_NAME = 'Workplace Formula';
 const DB_PATH = __DIR__ . '/storage/app.sqlite';
+const REMEMBER_COOKIE_NAME = 'wf_remember';
+const REMEMBER_TOKEN_DAYS = 30;
 
 function ensureStorage(): void
 {
@@ -181,6 +183,18 @@ function migrateSqlite(PDO $pdo): void
             FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL
         )'
     );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS remember_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            selector TEXT NOT NULL UNIQUE,
+            token_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )'
+    );
 }
 
 function migratePostgres(PDO $pdo): void
@@ -209,6 +223,17 @@ function migratePostgres(PDO $pdo): void
             assignee_ids_json TEXT NOT NULL DEFAULT \'[]\',
             created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
             updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+        )'
+    );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS remember_tokens (
+            id BIGSERIAL PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            selector TEXT NOT NULL UNIQUE,
+            token_hash TEXT NOT NULL,
+            expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
         )'
     );
 }
@@ -311,6 +336,206 @@ function createUser(PDO $pdo, string $name, string $email, string $passwordHash,
     return (int) $pdo->lastInsertId();
 }
 
+function loginUser(int $userId, bool $remember = true): void
+{
+    $_SESSION['user_id'] = $userId;
+    session_regenerate_id(true);
+
+    if ($remember) {
+        issueRememberToken($userId);
+    }
+}
+
+function logoutUser(): void
+{
+    revokeRememberTokenByCookie();
+    clearRememberCookie();
+    unset($_SESSION['user_id']);
+    session_regenerate_id(true);
+}
+
+function issueRememberToken(int $userId): void
+{
+    $pdo = db();
+    $selector = bin2hex(random_bytes(9));
+    $token = bin2hex(random_bytes(32));
+    $tokenHash = hash('sha256', $token);
+    $expiresAt = (new DateTimeImmutable('+' . REMEMBER_TOKEN_DAYS . ' days'))->format('Y-m-d H:i:s');
+    $createdAt = nowIso();
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO remember_tokens (user_id, selector, token_hash, expires_at, created_at)
+         VALUES (:user_id, :selector, :token_hash, :expires_at, :created_at)'
+    );
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':selector' => $selector,
+        ':token_hash' => $tokenHash,
+        ':expires_at' => $expiresAt,
+        ':created_at' => $createdAt,
+    ]);
+
+    pruneRememberTokensForUser($userId, 8);
+    setRememberCookie($selector, $token, (new DateTimeImmutable($expiresAt))->getTimestamp());
+}
+
+function pruneRememberTokensForUser(int $userId, int $keep = 8): void
+{
+    $pdo = db();
+    $driver = dbDriverName($pdo);
+
+    if ($driver === 'pgsql') {
+        $sql = 'DELETE FROM remember_tokens
+                WHERE id IN (
+                    SELECT id FROM remember_tokens
+                    WHERE user_id = :user_id
+                    ORDER BY created_at DESC
+                    OFFSET :offset
+                )';
+    } else {
+        $sql = 'DELETE FROM remember_tokens
+                WHERE id IN (
+                    SELECT id FROM remember_tokens
+                    WHERE user_id = :user_id
+                    ORDER BY created_at DESC
+                    LIMIT -1 OFFSET :offset
+                )';
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', max(0, $keep), PDO::PARAM_INT);
+    $stmt->execute();
+}
+
+function setRememberCookie(string $selector, string $token, int $expiresTs): void
+{
+    $cookieValue = $selector . ':' . $token;
+
+    setcookie(REMEMBER_COOKIE_NAME, $cookieValue, [
+        'expires' => $expiresTs,
+        'path' => '/',
+        'domain' => '',
+        'secure' => requestIsHttps(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    $_COOKIE[REMEMBER_COOKIE_NAME] = $cookieValue;
+}
+
+function clearRememberCookie(): void
+{
+    setcookie(REMEMBER_COOKIE_NAME, '', [
+        'expires' => time() - 3600,
+        'path' => '/',
+        'domain' => '',
+        'secure' => requestIsHttps(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    unset($_COOKIE[REMEMBER_COOKIE_NAME]);
+}
+
+function requestIsHttps(): bool
+{
+    $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+    if ($https === 'on' || $https === '1') {
+        return true;
+    }
+
+    $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($forwardedProto === 'https') {
+        return true;
+    }
+
+    return ((int) ($_SERVER['SERVER_PORT'] ?? 0)) === 443;
+}
+
+function rememberCookieParts(): ?array
+{
+    $raw = (string) ($_COOKIE[REMEMBER_COOKIE_NAME] ?? '');
+    if ($raw === '' || !str_contains($raw, ':')) {
+        return null;
+    }
+
+    [$selector, $token] = explode(':', $raw, 2);
+    if ($selector === '' || $token === '') {
+        return null;
+    }
+
+    return [$selector, $token];
+}
+
+function revokeRememberTokenByCookie(): void
+{
+    $parts = rememberCookieParts();
+    if (!$parts) {
+        return;
+    }
+
+    [$selector] = $parts;
+    $stmt = db()->prepare('DELETE FROM remember_tokens WHERE selector = :selector');
+    $stmt->execute([':selector' => $selector]);
+}
+
+function restoreRememberedSession(): void
+{
+    static $attempted = false;
+
+    if ($attempted) {
+        return;
+    }
+    $attempted = true;
+
+    if (!empty($_SESSION['user_id'])) {
+        return;
+    }
+
+    $parts = rememberCookieParts();
+    if (!$parts) {
+        return;
+    }
+
+    [$selector, $plainToken] = $parts;
+
+    $stmt = db()->prepare(
+        'SELECT user_id, token_hash, expires_at
+         FROM remember_tokens
+         WHERE selector = :selector
+         LIMIT 1'
+    );
+    $stmt->execute([':selector' => $selector]);
+    $row = $stmt->fetch();
+
+    if (!$row) {
+        clearRememberCookie();
+        return;
+    }
+
+    $expiresAt = (string) ($row['expires_at'] ?? '');
+    if ($expiresAt === '' || strtotime($expiresAt) === false || strtotime($expiresAt) < time()) {
+        $delete = db()->prepare('DELETE FROM remember_tokens WHERE selector = :selector');
+        $delete->execute([':selector' => $selector]);
+        clearRememberCookie();
+        return;
+    }
+
+    $expectedHash = (string) ($row['token_hash'] ?? '');
+    $actualHash = hash('sha256', $plainToken);
+
+    if (!hash_equals($expectedHash, $actualHash)) {
+        $delete = db()->prepare('DELETE FROM remember_tokens WHERE selector = :selector');
+        $delete->execute([':selector' => $selector]);
+        clearRememberCookie();
+        return;
+    }
+
+    // Rotate token on successful remember-login.
+    $delete = db()->prepare('DELETE FROM remember_tokens WHERE selector = :selector');
+    $delete->execute([':selector' => $selector]);
+    loginUser((int) $row['user_id'], true);
+}
+
 function e(?string $value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -360,6 +585,10 @@ function verifyCsrf(): void
 
 function currentUser(): ?array
 {
+    if (empty($_SESSION['user_id'])) {
+        restoreRememberedSession();
+    }
+
     $userId = $_SESSION['user_id'] ?? null;
     if (!$userId) {
         return null;
@@ -370,7 +599,7 @@ function currentUser(): ?array
     $user = $stmt->fetch();
 
     if (!$user) {
-        unset($_SESSION['user_id']);
+        logoutUser();
         return null;
     }
 
