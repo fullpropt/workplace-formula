@@ -1,38 +1,30 @@
 <svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="wf_grad" x1="22" y1="24" x2="106" y2="104" gradientUnits="userSpaceOnUse">
+    <linearGradient id="wfMarkGrad" x1="24" y1="24" x2="102" y2="104" gradientUnits="userSpaceOnUse">
       <stop stop-color="#2CE58D"/>
       <stop offset="1" stop-color="#2CC7FF"/>
     </linearGradient>
-    <linearGradient id="wf_glow" x1="30" y1="22" x2="98" y2="106" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#B8FFE5" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#AEEBFF" stop-opacity="0.6"/>
-    </linearGradient>
   </defs>
 
-  <g opacity="0.16" filter="url(#shadow)">
-    <circle cx="64" cy="64" r="46" stroke="url(#wf_grad)" stroke-width="6"/>
-  </g>
+  <circle
+    cx="64"
+    cy="64"
+    r="39"
+    stroke="url(#wfMarkGrad)"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-dasharray="172 80"
+    transform="rotate(-20 64 64)"
+    opacity="0.9"
+  />
 
-  <g stroke="url(#wf_grad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M34 42L64 25L94 42L94 86L64 103L34 86V42Z" opacity="0.75"/>
-    <path d="M42 64H86" opacity="0.65"/>
-    <path d="M50 78L61 89L81 56"/>
-  </g>
+  <path
+    d="M43 67.5L57.5 82L86 49.5"
+    stroke="url(#wfMarkGrad)"
+    stroke-width="8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 
-  <g fill="#071223" stroke="url(#wf_glow)" stroke-width="4">
-    <circle cx="34" cy="42" r="5"/>
-    <circle cx="64" cy="25" r="5"/>
-    <circle cx="94" cy="42" r="5"/>
-    <circle cx="94" cy="86" r="5"/>
-    <circle cx="64" cy="103" r="5"/>
-    <circle cx="34" cy="86" r="5"/>
-  </g>
-
-  <defs>
-    <filter id="shadow" x="10" y="10" width="108" height="108" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#1FD8FF" flood-opacity="0.18"/>
-    </filter>
-  </defs>
+  <circle cx="92.5" cy="36.5" r="4.5" fill="url(#wfMarkGrad)"/>
 </svg>
-

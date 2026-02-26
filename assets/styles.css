@@ -11,6 +11,7 @@
     --radius-sm: 14px;
     --font-display: "Space Grotesk", sans-serif;
     --font-ui: "Plus Jakarta Sans", sans-serif;
+    --font-brand: "Syne", sans-serif;
 }
 
 * {
@@ -155,12 +156,12 @@ textarea {
 .brand-wordmark {
     display: inline-flex;
     align-items: baseline;
-    gap: 0;
+    gap: 0.08em;
     min-width: 0;
-    font-family: var(--font-display);
+    font-family: var(--font-brand);
     font-size: 1rem;
     font-weight: 700;
-    letter-spacing: -0.028em;
+    letter-spacing: -0.036em;
     line-height: 1;
 }
 
@@ -170,7 +171,7 @@ textarea {
 
 .brand-wordmark-sub {
     color: rgba(255, 255, 255, 0.75);
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .nav-links {
@@ -315,17 +316,19 @@ textarea {
 }
 
 .auth-brand-block {
-    display: inline-flex;
-    align-items: center;
+    width: 100%;
+    display: grid;
+    justify-items: center;
     justify-content: center;
-    gap: 12px;
-    margin: 4px auto 0;
+    gap: 8px;
+    margin: 4px 0 0;
     padding: 4px 0;
+    text-align: center;
 }
 
 .auth-mark {
-    width: 44px;
-    height: 44px;
+    width: 34px;
+    height: 34px;
     display: grid;
     place-items: center;
 }
@@ -338,8 +341,9 @@ textarea {
 }
 
 .auth-wordmark {
-    font-size: 1.32rem;
-    letter-spacing: -0.032em;
+    justify-content: center;
+    font-size: 1.2rem;
+    letter-spacing: -0.038em;
 }
 
 .auth-wordmark .brand-wordmark-main {
@@ -348,10 +352,11 @@ textarea {
 
 .auth-wordmark .brand-wordmark-sub {
     color: rgba(255, 255, 255, 0.82);
+    opacity: 0.92;
 }
 
 .auth-card-head {
-    margin-top: 20px;
+    margin-top: 16px;
     text-align: center;
 }
 
@@ -803,16 +808,21 @@ textarea:focus {
 }
 
 .users-sidebar {
-    grid-template-rows: 1fr auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 720px;
+    gap: 12px;
 }
 
-.users-panel {
+.users-sidebar-body {
     min-height: 0;
 }
 
 .sidebar-footer {
     display: flex;
     justify-content: flex-end;
+    margin-top: auto;
+    padding-top: 8px;
 }
 
 .icon-gear-button {
@@ -1230,10 +1240,13 @@ textarea:focus {
 
 .tasklist-layout {
     grid-template-columns: 300px 1fr;
+    align-items: stretch;
 }
 
 .tasklist-wrap {
     min-height: 720px;
+    position: relative;
+    padding-bottom: 64px;
 }
 
 .task-filters {
@@ -1661,10 +1674,10 @@ textarea:focus {
 }
 
 .task-fab-stack {
-    position: fixed;
-    right: 20px;
-    bottom: 18px;
-    z-index: 34;
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 10;
     display: grid;
     justify-items: end;
     gap: 10px;
@@ -1712,35 +1725,17 @@ textarea:focus {
 }
 
 .task-fab-main {
-    width: 46px;
-    height: 46px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background:
-        radial-gradient(circle at 30% 20%, rgba(47, 222, 172, 0.34), transparent 60%),
-        radial-gradient(circle at 100% 100%, rgba(44, 199, 255, 0.34), transparent 65%),
-        rgba(8, 12, 24, 0.92);
-    box-shadow:
-        0 16px 34px rgba(0, 0, 0, 0.28),
-        inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.94);
+    position: relative;
     display: grid;
     place-items: center;
     padding: 0;
-    cursor: pointer;
-    transition: transform 160ms ease, border-color 160ms ease;
-}
-
-.task-fab-main:hover,
-.task-fab-main:focus-visible {
-    border-color: rgba(44, 199, 255, 0.28);
-    transform: translateY(-1px);
 }
 
 .task-fab-main span {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     line-height: 1;
     transform: translateY(-1px);
+    display: block;
 }
 
 .task-fab-stack.is-open .task-fab-main span {
@@ -1862,8 +1857,8 @@ textarea:focus {
     }
 
     .task-fab-stack {
-        right: 16px;
-        bottom: 14px;
+        right: 12px;
+        bottom: 12px;
     }
 }
 

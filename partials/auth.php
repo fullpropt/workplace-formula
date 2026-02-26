@@ -4,7 +4,7 @@
 
         <div class="auth-brand-block">
             <div class="auth-mark" aria-hidden="true">
-                <img src="assets/logo-mark.svg" alt="" width="44" height="44">
+                <img src="assets/logo-mark.svg?v=3" alt="" width="44" height="44">
             </div>
             <strong class="brand-wordmark auth-wordmark">
                 <span class="brand-wordmark-main">Workplace</span><span class="brand-wordmark-sub">Formula</span>

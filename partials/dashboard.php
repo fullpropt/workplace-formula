@@ -1,7 +1,7 @@
 ﻿<header class="top-nav dashboard-nav">
     <a href="index.php" class="brand" aria-label="Workplace Formula">
         <span class="brand-icon-wrap" aria-hidden="true">
-            <img src="assets/logo-mark.svg" alt="" class="brand-icon" width="26" height="26">
+            <img src="assets/logo-mark.svg?v=3" alt="" class="brand-icon" width="26" height="26">
         </span>
         <span class="brand-wordmark">
             <span class="brand-wordmark-main">Workplace</span><span class="brand-wordmark-sub">Formula</span>
@@ -50,8 +50,8 @@
     </section>
 
     <section class="workspace-layout tasklist-layout">
-        <aside class="sidebar-stack users-sidebar">
-            <section class="panel users-panel" id="team">
+        <aside class="panel users-sidebar" id="team">
+            <div class="users-sidebar-body">
                 <div class="panel-header">
                     <h2>Usuarios</h2>
                 </div>
@@ -70,7 +70,7 @@
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </ul>
-            </section>
+            </div>
 
             <footer class="sidebar-footer">
                 <button type="button" class="icon-gear-button" title="Configuracoes" aria-label="Configuracoes">
@@ -284,30 +284,30 @@
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+
+            <div class="task-fab-stack" data-task-fab-wrap>
+                <div class="task-fab-menu" data-task-fab-menu aria-hidden="true">
+                    <button type="button" class="task-fab-action" data-open-create-group-modal>
+                        <span class="task-fab-action-label">Criar grupo</span>
+                    </button>
+                    <button type="button" class="task-fab-action" data-open-create-task-modal>
+                        <span class="task-fab-action-label">Criar tarefa</span>
+                    </button>
+                </div>
+                <button
+                    type="button"
+                    class="task-fab-main icon-gear-button"
+                    data-task-fab-toggle
+                    aria-expanded="false"
+                    aria-label="Abrir menu de criacao"
+                    title="Criar"
+                >
+                    <span aria-hidden="true">+</span>
+                </button>
+            </div>
         </section>
     </section>
 </main>
-
-<div class="task-fab-stack" data-task-fab-wrap>
-    <div class="task-fab-menu" data-task-fab-menu aria-hidden="true">
-        <button type="button" class="task-fab-action" data-open-create-group-modal>
-            <span class="task-fab-action-label">Criar grupo</span>
-        </button>
-        <button type="button" class="task-fab-action" data-open-create-task-modal>
-            <span class="task-fab-action-label">Criar tarefa</span>
-        </button>
-    </div>
-    <button
-        type="button"
-        class="task-fab-main"
-        data-task-fab-toggle
-        aria-expanded="false"
-        aria-label="Abrir menu de criacao"
-        title="Criar"
-    >
-        <span aria-hidden="true">+</span>
-    </button>
-</div>
 
 <div class="modal-backdrop" data-create-modal hidden>
     <div class="modal-scrim" data-close-create-modal></div>
