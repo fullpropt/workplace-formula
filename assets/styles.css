@@ -1901,6 +1901,53 @@ textarea:focus {
     box-shadow: var(--shadow);
 }
 
+.is-dashboard .team-list,
+.is-dashboard .task-groups-list,
+.assignee-picker-menu,
+.create-task-modal,
+.task-detail-modal {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(108, 168, 255, 0.34) rgba(255, 255, 255, 0.03);
+}
+
+.is-dashboard .team-list::-webkit-scrollbar,
+.is-dashboard .task-groups-list::-webkit-scrollbar,
+.assignee-picker-menu::-webkit-scrollbar,
+.create-task-modal::-webkit-scrollbar,
+.task-detail-modal::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.is-dashboard .team-list::-webkit-scrollbar-track,
+.is-dashboard .task-groups-list::-webkit-scrollbar-track,
+.assignee-picker-menu::-webkit-scrollbar-track,
+.create-task-modal::-webkit-scrollbar-track,
+.task-detail-modal::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 999px;
+}
+
+.is-dashboard .team-list::-webkit-scrollbar-thumb,
+.is-dashboard .task-groups-list::-webkit-scrollbar-thumb,
+.assignee-picker-menu::-webkit-scrollbar-thumb,
+.create-task-modal::-webkit-scrollbar-thumb,
+.task-detail-modal::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background:
+        linear-gradient(180deg, rgba(129, 110, 255, 0.36), rgba(52, 197, 255, 0.3));
+    border: 2px solid rgba(10, 15, 29, 0.6);
+}
+
+.is-dashboard .team-list::-webkit-scrollbar-thumb:hover,
+.is-dashboard .task-groups-list::-webkit-scrollbar-thumb:hover,
+.assignee-picker-menu::-webkit-scrollbar-thumb:hover,
+.create-task-modal::-webkit-scrollbar-thumb:hover,
+.task-detail-modal::-webkit-scrollbar-thumb:hover {
+    background:
+        linear-gradient(180deg, rgba(154, 138, 255, 0.5), rgba(76, 214, 255, 0.42));
+}
+
 .assignee-option {
     display: grid;
     grid-template-columns: auto 1fr;
