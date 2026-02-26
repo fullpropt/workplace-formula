@@ -1,5 +1,12 @@
 ﻿<header class="top-nav dashboard-nav">
-    <div class="brand">Workplace<span>Formula</span></div>
+    <a href="index.php" class="brand" aria-label="Workplace Formula">
+        <span class="brand-icon-wrap" aria-hidden="true">
+            <img src="assets/logo-mark.svg" alt="" class="brand-icon" width="26" height="26">
+        </span>
+        <span class="brand-wordmark">
+            <span class="brand-wordmark-main">Workplace</span><span class="brand-wordmark-sub">Formula</span>
+        </span>
+    </a>
     <nav class="nav-links" aria-label="Navegação do dashboard">
         <a href="#tasks">Tarefas</a>
         <a href="#new-task">Nova tarefa</a>
@@ -56,12 +63,12 @@
 
                     <label>
                         <span>Titulo</span>
-                        <input type="text" name="title" maxlength="140" placeholder="Ex.: Revisar landing da campanha" required>
+                        <input type="text" name="title" maxlength="140" required>
                     </label>
 
                     <label>
                         <span>Descricao</span>
-                        <textarea name="description" rows="4" placeholder="Detalhes, contexto, links ou checklist rapido..."></textarea>
+                        <textarea name="description" rows="4"></textarea>
                     </label>
 
                     <label>
@@ -308,7 +315,7 @@
 
                                                     <label>
                                                         <span>Descricao</span>
-                                                        <textarea name="description" rows="3" placeholder="Descricao da tarefa..."><?= e((string) $task['description']) ?></textarea>
+                                                        <textarea name="description" rows="3"><?= e((string) $task['description']) ?></textarea>
                                                     </label>
                                                 </div>
 
