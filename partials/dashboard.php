@@ -19,19 +19,7 @@
     </form>
 </header>
 
-<main class="dashboard">
-    <section class="hero dashboard-hero">
-        <p class="eyebrow">WORKSPACE OPERACIONAL</p>
-        <h1>Organize, delegue e entregue<br>com o time alinhado.</h1>
-        <p class="hero-copy">
-            Um painel compartilhado para registrar demandas, acompanhar progresso e distribuir responsabilidades com clareza.
-        </p>
-        <div class="hero-actions">
-            <a href="#new-task" class="btn btn-pill">Nova tarefa</a>
-            <a href="#board" class="btn btn-ghost">Ir para o quadro</a>
-        </div>
-    </section>
-
+<main class="dashboard dashboard-compact">
     <section class="stats-strip dashboard-stats" aria-label="Indicadores do workspace">
         <div class="stat-cell">
             <span>Tarefas</span>
@@ -61,7 +49,6 @@
                 <div class="panel-header">
                     <span class="pill-label">Criar tarefa</span>
                     <h2>Nova demanda</h2>
-                    <p>Registre uma tarefa e já atribua responsável, prioridade e prazo.</p>
                 </div>
 
                 <form method="post" class="form-stack">
@@ -121,11 +108,10 @@
                 </form>
             </section>
 
-            <section class="panel">
+            <section class="panel" id="team">
                 <div class="panel-header">
-                    <span class="pill-label">Resumo rápido</span>
-                    <h2>Time & foco</h2>
-                    <p id="team">Usuários cadastrados e orientações de uso para o fluxo diário.</p>
+                    <span class="pill-label">Time</span>
+                    <h2>Usuarios</h2>
                 </div>
                 <ul class="team-list">
                     <?php if (!$users): ?>
@@ -142,10 +128,6 @@
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </ul>
-                <div class="tip-box">
-                    <strong>Fluxo recomendado</strong>
-                    <p>Crie no Backlog, mova para Em andamento quando iniciar, use Revisão para validação e finalize em Concluído.</p>
-                </div>
             </section>
         </aside>
 
@@ -154,7 +136,6 @@
                 <div>
                     <span class="pill-label">Quadro Kanban</span>
                     <h2>Tarefas do time</h2>
-                    <p>Visualize tudo em colunas e atualize o status direto em cada card.</p>
                 </div>
                 <div class="board-summary">
                     <span><?= e((string) count($users)) ?> usuários</span>
