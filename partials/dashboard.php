@@ -218,6 +218,8 @@
                                             <input type="hidden" name="action" value="update_task">
                                             <input type="hidden" name="task_id" value="<?= e((string) $taskId) ?>">
                                             <input type="hidden" name="autosave" value="1">
+                                            <input type="hidden" name="reference_links_json" value="<?= e(encodeReferenceUrlList($task['reference_links'] ?? [])) ?>" data-task-reference-links-json>
+                                            <input type="hidden" name="reference_images_json" value="<?= e(encodeReferenceUrlList($task['reference_images'] ?? [])) ?>" data-task-reference-images-json>
 
                                             <div class="task-line-row">
                                                 <div class="task-line-title">
@@ -248,7 +250,7 @@
                                                     <select name="priority" class="tag-select priority-select priority-<?= e($priorityKey) ?>">
                                                         <?php foreach ($priorityOptions as $optionKey => $optionLabel): ?>
                                                             <option value="<?= e($optionKey) ?>"<?= $optionKey === $priorityKey ? ' selected' : '' ?>>
-                                                                <?= e($optionLabel) ?>
+                                                                &#9873;
                                                             </option>
                                                         <?php endforeach; ?>
                                                     </select>
@@ -417,9 +419,9 @@
 
                 <label>
                     <span>Prioridade</span>
-                    <select name="priority">
+                    <select name="priority" class="priority-select priority-medium" aria-label="Prioridade">
                         <?php foreach ($priorityOptions as $key => $label): ?>
-                            <option value="<?= e($key) ?>"<?= $key === 'medium' ? ' selected' : '' ?>><?= e($label) ?></option>
+                            <option value="<?= e($key) ?>"<?= $key === 'medium' ? ' selected' : '' ?>>&#9873;</option>
                         <?php endforeach; ?>
                     </select>
                 </label>
@@ -527,6 +529,20 @@
                     <div class="task-detail-view-description" data-task-detail-view-description></div>
                 </div>
 
+                <div class="task-detail-view-block" data-task-detail-view-references hidden>
+                    <div class="task-detail-view-label">Referencias</div>
+
+                    <div class="task-detail-ref-section" data-task-detail-view-links-wrap hidden>
+                        <div class="task-detail-ref-title">Links</div>
+                        <div class="task-detail-ref-links" data-task-detail-view-links></div>
+                    </div>
+
+                    <div class="task-detail-ref-section" data-task-detail-view-images-wrap hidden>
+                        <div class="task-detail-ref-title">Imagens</div>
+                        <div class="task-detail-ref-images" data-task-detail-view-images></div>
+                    </div>
+                </div>
+
                 <div class="task-detail-view-meta">
                     <span data-task-detail-view-created-by></span>
                     <span data-task-detail-view-updated-at></span>
@@ -554,7 +570,7 @@
                             <span>Prioridade</span>
                             <select class="tag-select priority-select" data-task-detail-edit-priority>
                                 <?php foreach ($priorityOptions as $key => $label): ?>
-                                    <option value="<?= e($key) ?>"><?= e($label) ?></option>
+                                    <option value="<?= e($key) ?>">&#9873;</option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
@@ -584,6 +600,18 @@
                         <span>Descricao</span>
                         <textarea rows="5" data-task-detail-edit-description></textarea>
                     </label>
+
+                    <div class="task-detail-edit-references">
+                        <label>
+                            <span>Links de referencia (um por linha)</span>
+                            <textarea rows="3" data-task-detail-edit-links></textarea>
+                        </label>
+
+                        <label>
+                            <span>Imagens de referencia (URLs, uma por linha)</span>
+                            <textarea rows="3" data-task-detail-edit-images></textarea>
+                        </label>
+                    </div>
                 </div>
             </section>
         </div>

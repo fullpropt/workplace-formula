@@ -75,6 +75,14 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const priorityFlagGlyph = "\u2691";
+  const priorityLabels = {
+    low: "Baixa",
+    medium: "Media",
+    high: "Alta",
+    urgent: "Urgente",
+  };
+
   document
     .querySelectorAll(".status-select, .priority-select")
     .forEach(syncSelectColor);
@@ -83,6 +91,18 @@ window.addEventListener("DOMContentLoaded", () => {
     const select = event.target.closest(".status-select, .priority-select");
     if (select) {
       syncSelectColor(select);
+    }
+  });
+
+  document.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    if (
+      target.matches("[data-task-detail-edit-description]") ||
+      target.matches("[data-task-detail-edit-links]") ||
+      target.matches("[data-task-detail-edit-images]")
+    ) {
+      autoResizeTextarea(target);
     }
   });
 
@@ -137,6 +157,105 @@ window.addEventListener("DOMContentLoaded", () => {
       title: formatted,
       isRelative: false,
     };
+  };
+
+  const autoResizeTextarea = (textarea) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  const parseReferenceLines = (value) => {
+    const seen = new Set();
+    return String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => {
+        if (!line) return false;
+        try {
+          const url = new URL(line);
+          if (!["http:", "https:"].includes(url.protocol)) return false;
+          const normalized = url.toString();
+          if (seen.has(normalized)) return false;
+          seen.add(normalized);
+          return true;
+        } catch (_error) {
+          return false;
+        }
+      })
+      .map((line) => {
+        try {
+          return new URL(line).toString();
+        } catch (_error) {
+          return line;
+        }
+      });
+  };
+
+  const readJsonUrlListField = (field) => {
+    if (!(field instanceof HTMLInputElement)) return [];
+    const raw = (field.value || "").trim();
+    if (!raw) return [];
+    try {
+      const decoded = JSON.parse(raw);
+      if (!Array.isArray(decoded)) return [];
+      return parseReferenceLines(decoded.join("\n"));
+    } catch (_error) {
+      return parseReferenceLines(raw);
+    }
+  };
+
+  const writeJsonUrlListField = (field, urls) => {
+    if (!(field instanceof HTMLInputElement)) return;
+    field.value = JSON.stringify(parseReferenceLines((urls || []).join("\n")));
+  };
+
+  const renderTaskDetailReferencesView = ({ links = [], images = [] } = {}) => {
+    const safeLinks = parseReferenceLines((links || []).join("\n"));
+    const safeImages = parseReferenceLines((images || []).join("\n"));
+
+    if (taskDetailViewLinks instanceof HTMLElement) {
+      taskDetailViewLinks.innerHTML = "";
+      safeLinks.forEach((url) => {
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noreferrer noopener";
+        a.className = "task-detail-ref-link";
+        a.textContent = url;
+        taskDetailViewLinks.append(a);
+      });
+    }
+    if (taskDetailViewLinksWrap instanceof HTMLElement) {
+      taskDetailViewLinksWrap.hidden = safeLinks.length === 0;
+    }
+
+    if (taskDetailViewImages instanceof HTMLElement) {
+      taskDetailViewImages.innerHTML = "";
+      safeImages.forEach((url) => {
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noreferrer noopener";
+        a.className = "task-detail-ref-image-link";
+
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Referencia da tarefa";
+        img.loading = "lazy";
+        img.className = "task-detail-ref-image";
+
+        a.append(img);
+        taskDetailViewImages.append(a);
+      });
+    }
+    if (taskDetailViewImagesWrap instanceof HTMLElement) {
+      taskDetailViewImagesWrap.hidden = safeImages.length === 0;
+    }
+
+    if (taskDetailViewReferences instanceof HTMLElement) {
+      taskDetailViewReferences.hidden = safeLinks.length === 0 && safeImages.length === 0;
+    }
   };
 
   const syncDueDateDisplay = (input) => {
@@ -394,6 +513,19 @@ window.addEventListener("DOMContentLoaded", () => {
       const data = await postFormJson(form);
       const task = data.task || {};
       const taskItem = form.closest("[data-task-item]");
+
+      if (typeof task.reference_links_json === "string") {
+        const linksField = form.querySelector("[data-task-reference-links-json]");
+        if (linksField instanceof HTMLInputElement) {
+          linksField.value = task.reference_links_json;
+        }
+      }
+      if (typeof task.reference_images_json === "string") {
+        const imagesField = form.querySelector("[data-task-reference-images-json]");
+        if (imagesField instanceof HTMLInputElement) {
+          imagesField.value = task.reference_images_json;
+        }
+      }
 
       if (taskItem instanceof HTMLElement && typeof task.group_name === "string") {
         moveTaskItemToGroupDom(taskItem, task.group_name);
@@ -760,6 +892,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const taskDetailViewDue = document.querySelector("[data-task-detail-view-due]");
   const taskDetailViewAssignees = document.querySelector("[data-task-detail-view-assignees]");
   const taskDetailViewDescription = document.querySelector("[data-task-detail-view-description]");
+  const taskDetailViewReferences = document.querySelector("[data-task-detail-view-references]");
+  const taskDetailViewLinksWrap = document.querySelector("[data-task-detail-view-links-wrap]");
+  const taskDetailViewLinks = document.querySelector("[data-task-detail-view-links]");
+  const taskDetailViewImagesWrap = document.querySelector("[data-task-detail-view-images-wrap]");
+  const taskDetailViewImages = document.querySelector("[data-task-detail-view-images]");
   const taskDetailViewCreatedBy = document.querySelector("[data-task-detail-view-created-by]");
   const taskDetailViewUpdatedAt = document.querySelector("[data-task-detail-view-updated-at]");
   const taskDetailEditTitle = document.querySelector("[data-task-detail-edit-title]");
@@ -768,6 +905,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const taskDetailEditGroup = document.querySelector("[data-task-detail-edit-group]");
   const taskDetailEditDueDate = document.querySelector("[data-task-detail-edit-due-date]");
   const taskDetailEditDescription = document.querySelector("[data-task-detail-edit-description]");
+  const taskDetailEditLinks = document.querySelector("[data-task-detail-edit-links]");
+  const taskDetailEditImages = document.querySelector("[data-task-detail-edit-images]");
   const taskDetailEditAssignees = document.querySelector("[data-task-detail-edit-assignees]");
   const taskDetailEditAssigneesMenu = document.querySelector("[data-task-detail-edit-assignees-menu]");
   const taskDetailEditButton = document.querySelector("[data-task-detail-edit]");
@@ -819,6 +958,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (isEditing) {
       window.setTimeout(() => {
+        [taskDetailEditDescription, taskDetailEditLinks, taskDetailEditImages].forEach(autoResizeTextarea);
         taskDetailEditTitle?.focus();
       }, 20);
     }
@@ -840,6 +980,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const rowAssigneePicker = form.querySelector(".row-assignee-picker");
     const groupSelect = form.querySelector('[name="group_name"]');
     const descriptionField = form.querySelector('textarea[name="description"]');
+    const referenceLinksField = form.querySelector('[data-task-reference-links-json]');
+    const referenceImagesField = form.querySelector('[data-task-reference-images-json]');
     const metaRow = form.querySelector(".task-line-meta");
 
     if (
@@ -865,6 +1007,8 @@ window.addEventListener("DOMContentLoaded", () => {
       rowAssigneePicker,
       groupSelect,
       descriptionField,
+      referenceLinksField: referenceLinksField instanceof HTMLInputElement ? referenceLinksField : null,
+      referenceImagesField: referenceImagesField instanceof HTMLInputElement ? referenceImagesField : null,
       metaRow,
     };
   };
@@ -914,6 +1058,27 @@ window.addEventListener("DOMContentLoaded", () => {
       .filter(Boolean);
   };
 
+  const syncTaskDetailViewPriorityTag = (priorityValue) => {
+    if (!(taskDetailViewPriority instanceof HTMLElement)) return;
+
+    Array.from(taskDetailViewPriority.classList).forEach((className) => {
+      if (className.startsWith("priority-")) {
+        taskDetailViewPriority.classList.remove(className);
+      }
+    });
+
+    const normalizedPriority =
+      typeof priorityValue === "string" && priorityValue.trim()
+        ? priorityValue.trim()
+        : "medium";
+    taskDetailViewPriority.classList.add(`priority-${normalizedPriority}`);
+    taskDetailViewPriority.textContent = priorityFlagGlyph;
+    taskDetailViewPriority.setAttribute(
+      "aria-label",
+      `Prioridade: ${priorityLabels[normalizedPriority] || normalizedPriority}`
+    );
+  };
+
   const populateTaskDetailModalFromRow = (context = taskDetailContext) => {
     if (!context) return;
     const {
@@ -924,19 +1089,21 @@ window.addEventListener("DOMContentLoaded", () => {
       rowAssigneePicker,
       groupSelect,
       descriptionField,
+      referenceLinksField,
+      referenceImagesField,
       metaRow,
     } = context;
 
     const titleValue = (titleInput.value || "").trim() || "Tarefa";
     const statusLabel =
       statusSelect.options[statusSelect.selectedIndex]?.textContent?.trim() || statusSelect.value || "Status";
-    const priorityLabel =
-      prioritySelect.options[prioritySelect.selectedIndex]?.textContent?.trim() || prioritySelect.value || "Prioridade";
     const groupLabel =
       groupSelect.options[groupSelect.selectedIndex]?.textContent?.trim() || groupSelect.value || "Geral";
     const dueMeta = dueDateMeta(dueDateInput.value || "");
     const assigneeNames = getCheckedAssigneeNames(rowAssigneePicker);
     const description = (descriptionField.value || "").trim();
+    const referenceLinks = readJsonUrlListField(referenceLinksField);
+    const referenceImages = readJsonUrlListField(referenceImagesField);
     const metaSpans = metaRow ? Array.from(metaRow.querySelectorAll("span")) : [];
     const createdByText = metaSpans[0]?.textContent?.trim() || "";
     const updatedAtText = metaRow?.querySelector("[data-task-updated-at]")?.textContent?.trim() || "";
@@ -944,7 +1111,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (taskDetailTitle) taskDetailTitle.textContent = titleValue;
     if (taskDetailViewTitle) taskDetailViewTitle.textContent = titleValue;
     if (taskDetailViewStatus) taskDetailViewStatus.textContent = statusLabel;
-    if (taskDetailViewPriority) taskDetailViewPriority.textContent = priorityLabel;
+    syncTaskDetailViewPriorityTag(prioritySelect.value || "medium");
     if (taskDetailViewGroup) taskDetailViewGroup.textContent = groupLabel;
     if (taskDetailViewDue) taskDetailViewDue.textContent = dueMeta.display;
     if (taskDetailViewAssignees) {
@@ -956,6 +1123,7 @@ window.addEventListener("DOMContentLoaded", () => {
       taskDetailViewDescription.textContent = description || "Sem descricao.";
       taskDetailViewDescription.classList.toggle("is-empty", !description);
     }
+    renderTaskDetailReferencesView({ links: referenceLinks, images: referenceImages });
     if (taskDetailViewCreatedBy) taskDetailViewCreatedBy.textContent = createdByText;
     if (taskDetailViewUpdatedAt) {
       taskDetailViewUpdatedAt.textContent = updatedAtText;
@@ -993,6 +1161,15 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (taskDetailEditDescription instanceof HTMLTextAreaElement) {
       taskDetailEditDescription.value = descriptionField.value || "";
+      autoResizeTextarea(taskDetailEditDescription);
+    }
+    if (taskDetailEditLinks instanceof HTMLTextAreaElement) {
+      taskDetailEditLinks.value = referenceLinks.join("\n");
+      autoResizeTextarea(taskDetailEditLinks);
+    }
+    if (taskDetailEditImages instanceof HTMLTextAreaElement) {
+      taskDetailEditImages.value = referenceImages.join("\n");
+      autoResizeTextarea(taskDetailEditImages);
     }
     copyAssigneesToTaskDetailModal(rowAssigneePicker);
   };
@@ -1048,6 +1225,12 @@ window.addEventListener("DOMContentLoaded", () => {
     context.prioritySelect.value = taskDetailEditPriority.value;
     context.dueDateInput.value = taskDetailEditDueDate.value;
     context.descriptionField.value = taskDetailEditDescription.value;
+    if (context.referenceLinksField instanceof HTMLInputElement && taskDetailEditLinks instanceof HTMLTextAreaElement) {
+      writeJsonUrlListField(context.referenceLinksField, parseReferenceLines(taskDetailEditLinks.value));
+    }
+    if (context.referenceImagesField instanceof HTMLInputElement && taskDetailEditImages instanceof HTMLTextAreaElement) {
+      writeJsonUrlListField(context.referenceImagesField, parseReferenceLines(taskDetailEditImages.value));
+    }
 
     const groupValue = (taskDetailEditGroup.value || "Geral").trim() || "Geral";
     if (!Array.from(context.groupSelect.options).some((option) => option.value === groupValue)) {
@@ -1465,6 +1648,9 @@ window.addEventListener("DOMContentLoaded", () => {
       createTaskForm
         .querySelectorAll(".assignee-picker")
         .forEach(updateAssigneePickerSummary);
+      createTaskForm
+        .querySelectorAll(".status-select, .priority-select")
+        .forEach(syncSelectColor);
     }
     if (createTaskGroupInput) {
       const nextGroup = (groupName || "").trim() || getDefaultGroupName();

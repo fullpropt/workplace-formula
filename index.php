@@ -248,6 +248,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $taskId = (int) ($_POST['task_id'] ?? 0);
                 $title = trim((string) ($_POST['title'] ?? ''));
                 $description = trim((string) ($_POST['description'] ?? ''));
+                $referenceLinksPosted = array_key_exists('reference_links_json', $_POST);
+                $referenceImagesPosted = array_key_exists('reference_images_json', $_POST);
+                $referenceLinks = $referenceLinksPosted
+                    ? decodeReferenceUrlList((string) ($_POST['reference_links_json'] ?? '[]'))
+                    : null;
+                $referenceImages = $referenceImagesPosted
+                    ? decodeReferenceUrlList((string) ($_POST['reference_images_json'] ?? '[]'))
+                    : null;
                 $status = normalizeTaskStatus((string) ($_POST['status'] ?? 'todo'));
                 $priority = normalizeTaskPriority((string) ($_POST['priority'] ?? 'medium'));
                 $dueDate = dueDateForStorage($_POST['due_date'] ?? null);
@@ -283,9 +291,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($action === 'create_task') {
+                    $referenceLinks ??= [];
+                    $referenceImages ??= [];
                     $stmt = $pdo->prepare(
-                        'INSERT INTO tasks (title, description, status, priority, due_date, created_by, assigned_to, assignee_ids_json, group_name, created_at, updated_at)
-                         VALUES (:t, :d, :s, :p, :dd, :cb, :at, :aj, :g, :c, :u)'
+                        'INSERT INTO tasks (title, description, status, priority, due_date, created_by, assigned_to, assignee_ids_json, reference_links_json, reference_images_json, group_name, created_at, updated_at)
+                         VALUES (:t, :d, :s, :p, :dd, :cb, :at, :aj, :rl, :ri, :g, :c, :u)'
                     );
                     $now = nowIso();
                     $stmt->execute([
@@ -297,6 +307,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':cb' => (int) $authUser['id'],
                         ':at' => $assignedTo,
                         ':aj' => $assigneeIdsJson,
+                        ':rl' => encodeReferenceUrlList($referenceLinks),
+                        ':ri' => encodeReferenceUrlList($referenceImages),
                         ':g' => $groupName,
                         ':c' => $now,
                         ':u' => $now,
@@ -308,6 +320,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($taskId <= 0) {
                     throw new RuntimeException('Tarefa inválida.');
                 }
+                if ($referenceLinks === null || $referenceImages === null) {
+                    $existingTaskStmt = $pdo->prepare(
+                        'SELECT reference_links_json, reference_images_json
+                         FROM tasks
+                         WHERE id = :id
+                         LIMIT 1'
+                    );
+                    $existingTaskStmt->execute([':id' => $taskId]);
+                    $existingTaskRow = $existingTaskStmt->fetch();
+                    if (!$existingTaskRow) {
+                        throw new RuntimeException('Tarefa invalida.');
+                    }
+                    if ($referenceLinks === null) {
+                        $referenceLinks = decodeReferenceUrlList($existingTaskRow['reference_links_json'] ?? null);
+                    }
+                    if ($referenceImages === null) {
+                        $referenceImages = decodeReferenceUrlList($existingTaskRow['reference_images_json'] ?? null);
+                    }
+                }
+
                 $stmt = $pdo->prepare(
                     'UPDATE tasks
                      SET title = :t,
@@ -317,6 +349,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          due_date = :dd,
                          assigned_to = :at,
                          assignee_ids_json = :aj,
+                         reference_links_json = :rl,
+                         reference_images_json = :ri,
                          group_name = :g,
                          updated_at = :u
                      WHERE id = :id'
@@ -330,6 +364,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':dd' => $dueDate,
                     ':at' => $assignedTo,
                     ':aj' => $assigneeIdsJson,
+                    ':rl' => encodeReferenceUrlList($referenceLinks ?? []),
+                    ':ri' => encodeReferenceUrlList($referenceImages ?? []),
                     ':g' => $groupName,
                     ':u' => $updatedAt,
                     ':id' => $taskId,
@@ -341,6 +377,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'id' => $taskId,
                             'group_name' => $groupName,
                             'due_date' => $dueDate,
+                            'reference_links_json' => encodeReferenceUrlList($referenceLinks ?? []),
+                            'reference_images_json' => encodeReferenceUrlList($referenceImages ?? []),
                             'updated_at' => $updatedAt,
                             'updated_at_label' => (new DateTimeImmutable($updatedAt))->format('d/m H:i'),
                         ],
@@ -444,8 +482,8 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=5">
-    <script src="assets/app.js?v=2" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=9">
+    <script src="assets/app.js?v=4" defer></script>
 </head>
 <body class="<?= $currentUser ? 'is-dashboard' : 'is-auth' ?>" data-default-group-name="<?= e((string) $protectedGroupName) ?>">
     <div class="bg-layer bg-layer-one" aria-hidden="true"></div>

@@ -178,6 +178,8 @@ function migrateSqlite(PDO $pdo): void
             assigned_to INTEGER DEFAULT NULL,
             group_name TEXT NOT NULL DEFAULT \'Geral\',
             assignee_ids_json TEXT NOT NULL DEFAULT \'[]\',
+            reference_links_json TEXT NOT NULL DEFAULT \'[]\',
+            reference_images_json TEXT NOT NULL DEFAULT \'[]\',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
@@ -232,6 +234,8 @@ function migratePostgres(PDO $pdo): void
             assigned_to BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
             group_name TEXT NOT NULL DEFAULT \'Geral\',
             assignee_ids_json TEXT NOT NULL DEFAULT \'[]\',
+            reference_links_json TEXT NOT NULL DEFAULT \'[]\',
+            reference_images_json TEXT NOT NULL DEFAULT \'[]\',
             created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
             updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
         )'
@@ -267,14 +271,22 @@ function ensureTaskExtendedSchema(PDO $pdo): void
     if (!tableHasColumn($pdo, 'tasks', 'assignee_ids_json')) {
         $pdo->exec("ALTER TABLE tasks ADD COLUMN assignee_ids_json TEXT NOT NULL DEFAULT '[]'");
     }
+    if (!tableHasColumn($pdo, 'tasks', 'reference_links_json')) {
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN reference_links_json TEXT NOT NULL DEFAULT '[]'");
+    }
+    if (!tableHasColumn($pdo, 'tasks', 'reference_images_json')) {
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN reference_images_json TEXT NOT NULL DEFAULT '[]'");
+    }
 
-    $stmt = $pdo->query('SELECT id, assigned_to, group_name, assignee_ids_json FROM tasks');
+    $stmt = $pdo->query('SELECT id, assigned_to, group_name, assignee_ids_json, reference_links_json, reference_images_json FROM tasks');
     $rows = $stmt ? $stmt->fetchAll() : [];
 
     $update = $pdo->prepare(
         'UPDATE tasks
          SET group_name = :group_name,
-             assignee_ids_json = :assignee_ids_json
+             assignee_ids_json = :assignee_ids_json,
+             reference_links_json = :reference_links_json,
+             reference_images_json = :reference_images_json
          WHERE id = :id'
     );
 
@@ -284,10 +296,14 @@ function ensureTaskExtendedSchema(PDO $pdo): void
             $row['assignee_ids_json'] ?? null,
             isset($row['assigned_to']) ? (int) $row['assigned_to'] : null
         );
+        $referenceLinks = decodeReferenceUrlList($row['reference_links_json'] ?? null);
+        $referenceImages = decodeReferenceUrlList($row['reference_images_json'] ?? null);
 
         $update->execute([
             ':group_name' => $groupName,
             ':assignee_ids_json' => encodeAssigneeIds($assigneeIds),
+            ':reference_links_json' => encodeReferenceUrlList($referenceLinks),
+            ':reference_images_json' => encodeReferenceUrlList($referenceImages),
             ':id' => (int) $row['id'],
         ]);
     }
@@ -797,6 +813,65 @@ function decodeAssigneeIds($jsonValue, ?int $fallbackAssignedTo = null): array
     return normalizeAssigneeIds($decoded);
 }
 
+function normalizeReferenceUrlList($value, int $maxItems = 20): array
+{
+    if (is_string($value)) {
+        $raw = trim($value);
+        if ($raw === '') {
+            $value = [];
+        } else {
+            $decoded = json_decode($raw, true);
+            $value = is_array($decoded) ? $decoded : preg_split('/\R+/u', $raw);
+        }
+    }
+
+    if (!is_array($value)) {
+        $value = [$value];
+    }
+
+    $result = [];
+
+    foreach ($value as $item) {
+        $url = trim((string) $item);
+        if ($url === '') {
+            continue;
+        }
+        if (mb_strlen($url) > 1000) {
+            $url = mb_substr($url, 0, 1000);
+        }
+
+        $validated = filter_var($url, FILTER_VALIDATE_URL);
+        if ($validated === false) {
+            continue;
+        }
+
+        $scheme = strtolower((string) parse_url($validated, PHP_URL_SCHEME));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            continue;
+        }
+
+        $result[$validated] = $validated;
+        if (count($result) >= $maxItems) {
+            break;
+        }
+    }
+
+    return array_values($result);
+}
+
+function encodeReferenceUrlList(array $urls): string
+{
+    return json_encode(
+        normalizeReferenceUrlList($urls),
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    ) ?: '[]';
+}
+
+function decodeReferenceUrlList($value): array
+{
+    return normalizeReferenceUrlList($value);
+}
+
 function findTaskGroupByName(string $groupName): ?string
 {
     $needle = mb_strtolower(normalizeTaskGroupName($groupName));
@@ -941,6 +1016,8 @@ function allTasks(): array
         $assigneeIds = normalizeAssigneeIds($assigneeIds, $usersById);
 
         $task['assignee_ids'] = $assigneeIds;
+        $task['reference_links'] = decodeReferenceUrlList($task['reference_links_json'] ?? null);
+        $task['reference_images'] = decodeReferenceUrlList($task['reference_images_json'] ?? null);
         $task['assignees'] = [];
 
         foreach ($assigneeIds as $id) {
