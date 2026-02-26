@@ -78,11 +78,57 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const taskStatusSortRank = (status) => {
+    switch ((status || "").trim()) {
+      case "done":
+        return 1;
+      case "todo":
+        return 2;
+      case "in_progress":
+        return 3;
+      case "review":
+        return 4;
+      default:
+        return 99;
+    }
+  };
+
   const getTaskItemStatusValue = (taskItem) => {
     if (!(taskItem instanceof HTMLElement)) return "";
     const select = taskItem.querySelector("select.status-select");
     if (!(select instanceof HTMLSelectElement)) return "";
     return (select.value || "").trim();
+  };
+
+  const sortGroupTaskItemsByStatus = (groupSectionOrDropzone) => {
+    let dropzone = groupSectionOrDropzone;
+
+    if (dropzone instanceof HTMLElement && !dropzone.matches("[data-task-dropzone]")) {
+      dropzone = dropzone.querySelector("[data-task-dropzone]");
+    }
+
+    if (!(dropzone instanceof HTMLElement)) return;
+
+    const taskItems = Array.from(dropzone.children).filter(
+      (child) => child instanceof HTMLElement && child.matches("[data-task-item]")
+    );
+
+    if (taskItems.length < 2) return;
+
+    const sorted = taskItems
+      .map((taskItem, index) => ({
+        taskItem,
+        index,
+        rank: taskStatusSortRank(getTaskItemStatusValue(taskItem)),
+      }))
+      .sort((a, b) => {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return a.index - b.index;
+      });
+
+    sorted.forEach(({ taskItem }) => {
+      dropzone.append(taskItem);
+    });
   };
 
   const syncGroupStatusDividers = (groupSectionOrDropzone) => {
@@ -148,6 +194,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const groupSection = taskItem.closest("[data-task-group]");
     if (groupSection instanceof HTMLElement) {
+      sortGroupTaskItemsByStatus(groupSection);
       syncGroupStatusDividers(groupSection);
     }
   };
@@ -534,6 +581,7 @@ window.addEventListener("DOMContentLoaded", () => {
       emptyRow.remove();
     }
 
+    sortGroupTaskItemsByStatus(dropzone);
     syncGroupStatusDividers(dropzone);
   };
 
