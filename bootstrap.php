@@ -151,6 +151,7 @@ function migrate(PDO $pdo): void
     }
 
     ensureWorkspaceSchema($pdo);
+    ensureWorkspaceVaultSchema($pdo);
     ensureTaskExtendedSchema($pdo);
     ensureTaskGroupsSchema($pdo);
     ensureTaskHistorySchema($pdo);
@@ -666,6 +667,50 @@ function ensureTaskGroupsSchema(PDO $pdo): void
             $workspaceId
         );
     }
+}
+
+function ensureWorkspaceVaultSchema(PDO $pdo): void
+{
+    if (dbDriverName($pdo) === 'pgsql') {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS workspace_vault_entries (
+                id BIGSERIAL PRIMARY KEY,
+                workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                login_value TEXT NOT NULL DEFAULT \'\',
+                password_value TEXT NOT NULL DEFAULT \'\',
+                notes TEXT NOT NULL DEFAULT \'\',
+                created_by BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+                updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+            )'
+        );
+    } else {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS workspace_vault_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL,
+                label TEXT NOT NULL,
+                login_value TEXT NOT NULL DEFAULT \'\',
+                password_value TEXT NOT NULL DEFAULT \'\',
+                notes TEXT NOT NULL DEFAULT \'\',
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )'
+        );
+    }
+
+    $pdo->exec(
+        'CREATE INDEX IF NOT EXISTS idx_workspace_vault_entries_workspace
+         ON workspace_vault_entries(workspace_id)'
+    );
+    $pdo->exec(
+        'CREATE INDEX IF NOT EXISTS idx_workspace_vault_entries_workspace_updated
+         ON workspace_vault_entries(workspace_id, updated_at)'
+    );
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -1838,6 +1883,208 @@ function usersMapById(?int $workspaceId = null): array
     return $map;
 }
 
+function workspaceVaultEntriesList(?int $workspaceId = null): array
+{
+    $workspaceId = $workspaceId && $workspaceId > 0 ? $workspaceId : activeWorkspaceId();
+    if ($workspaceId === null) {
+        return [];
+    }
+
+    $stmt = db()->prepare(
+        'SELECT ve.id,
+                ve.workspace_id,
+                ve.label,
+                ve.login_value,
+                ve.password_value,
+                ve.notes,
+                ve.created_by,
+                ve.created_at,
+                ve.updated_at,
+                u.name AS created_by_name
+         FROM workspace_vault_entries ve
+         LEFT JOIN users u ON u.id = ve.created_by
+         WHERE ve.workspace_id = :workspace_id
+         ORDER BY ve.updated_at DESC, ve.id DESC'
+    );
+    $stmt->execute([':workspace_id' => $workspaceId]);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$row) {
+        $row['id'] = (int) ($row['id'] ?? 0);
+        $row['workspace_id'] = (int) ($row['workspace_id'] ?? 0);
+        $row['created_by'] = isset($row['created_by']) ? (int) $row['created_by'] : null;
+        $row['label'] = normalizeVaultEntryLabel((string) ($row['label'] ?? ''));
+        $row['login_value'] = normalizeVaultFieldValue((string) ($row['login_value'] ?? ''), 220);
+        $row['password_value'] = normalizeVaultFieldValue((string) ($row['password_value'] ?? ''), 220);
+        $row['notes'] = trim((string) ($row['notes'] ?? ''));
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function createWorkspaceVaultEntry(
+    PDO $pdo,
+    int $workspaceId,
+    string $label,
+    string $loginValue,
+    string $passwordValue,
+    string $notes,
+    ?int $createdBy = null
+): int {
+    if ($workspaceId <= 0) {
+        throw new RuntimeException('Workspace invalido.');
+    }
+
+    $label = normalizeVaultEntryLabel($label);
+    if ($label === '') {
+        throw new RuntimeException('Informe um nome para o acesso.');
+    }
+
+    $loginValue = normalizeVaultFieldValue($loginValue, 220);
+    $passwordValue = normalizeVaultFieldValue($passwordValue, 220);
+    $notes = trim($notes);
+    if (mb_strlen($notes) > 4000) {
+        $notes = mb_substr($notes, 0, 4000);
+    }
+
+    $createdAt = nowIso();
+    $updatedAt = $createdAt;
+
+    if (dbDriverName($pdo) === 'pgsql') {
+        $stmt = $pdo->prepare(
+            'INSERT INTO workspace_vault_entries (
+                workspace_id, label, login_value, password_value, notes, created_by, created_at, updated_at
+            ) VALUES (
+                :workspace_id, :label, :login_value, :password_value, :notes, :created_by, :created_at, :updated_at
+            )
+            RETURNING id'
+        );
+        $stmt->bindValue(':workspace_id', $workspaceId, PDO::PARAM_INT);
+        $stmt->bindValue(':label', $label, PDO::PARAM_STR);
+        $stmt->bindValue(':login_value', $loginValue, PDO::PARAM_STR);
+        $stmt->bindValue(':password_value', $passwordValue, PDO::PARAM_STR);
+        $stmt->bindValue(':notes', $notes, PDO::PARAM_STR);
+        if ($createdBy !== null && $createdBy > 0) {
+            $stmt->bindValue(':created_by', $createdBy, PDO::PARAM_INT);
+        } else {
+            $stmt->bindValue(':created_by', null, PDO::PARAM_NULL);
+        }
+        $stmt->bindValue(':created_at', $createdAt, PDO::PARAM_STR);
+        $stmt->bindValue(':updated_at', $updatedAt, PDO::PARAM_STR);
+        $stmt->execute();
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO workspace_vault_entries (
+            workspace_id, label, login_value, password_value, notes, created_by, created_at, updated_at
+        ) VALUES (
+            :workspace_id, :label, :login_value, :password_value, :notes, :created_by, :created_at, :updated_at
+        )'
+    );
+    $stmt->bindValue(':workspace_id', $workspaceId, PDO::PARAM_INT);
+    $stmt->bindValue(':label', $label, PDO::PARAM_STR);
+    $stmt->bindValue(':login_value', $loginValue, PDO::PARAM_STR);
+    $stmt->bindValue(':password_value', $passwordValue, PDO::PARAM_STR);
+    $stmt->bindValue(':notes', $notes, PDO::PARAM_STR);
+    if ($createdBy !== null && $createdBy > 0) {
+        $stmt->bindValue(':created_by', $createdBy, PDO::PARAM_INT);
+    } else {
+        $stmt->bindValue(':created_by', null, PDO::PARAM_NULL);
+    }
+    $stmt->bindValue(':created_at', $createdAt, PDO::PARAM_STR);
+    $stmt->bindValue(':updated_at', $updatedAt, PDO::PARAM_STR);
+    $stmt->execute();
+
+    return (int) $pdo->lastInsertId();
+}
+
+function updateWorkspaceVaultEntry(
+    PDO $pdo,
+    int $workspaceId,
+    int $entryId,
+    string $label,
+    string $loginValue,
+    string $passwordValue,
+    string $notes
+): void {
+    if ($workspaceId <= 0 || $entryId <= 0) {
+        throw new RuntimeException('Registro invalido.');
+    }
+
+    $label = normalizeVaultEntryLabel($label);
+    if ($label === '') {
+        throw new RuntimeException('Informe um nome para o acesso.');
+    }
+
+    $loginValue = normalizeVaultFieldValue($loginValue, 220);
+    $passwordValue = normalizeVaultFieldValue($passwordValue, 220);
+    $notes = trim($notes);
+    if (mb_strlen($notes) > 4000) {
+        $notes = mb_substr($notes, 0, 4000);
+    }
+
+    $stmt = $pdo->prepare(
+        'UPDATE workspace_vault_entries
+         SET label = :label,
+             login_value = :login_value,
+             password_value = :password_value,
+             notes = :notes,
+             updated_at = :updated_at
+         WHERE id = :id
+           AND workspace_id = :workspace_id'
+    );
+    $stmt->execute([
+        ':label' => $label,
+        ':login_value' => $loginValue,
+        ':password_value' => $passwordValue,
+        ':notes' => $notes,
+        ':updated_at' => nowIso(),
+        ':id' => $entryId,
+        ':workspace_id' => $workspaceId,
+    ]);
+
+    if ($stmt->rowCount() <= 0) {
+        $existsStmt = $pdo->prepare(
+            'SELECT 1
+             FROM workspace_vault_entries
+             WHERE id = :id
+               AND workspace_id = :workspace_id
+             LIMIT 1'
+        );
+        $existsStmt->execute([
+            ':id' => $entryId,
+            ':workspace_id' => $workspaceId,
+        ]);
+        if (!$existsStmt->fetchColumn()) {
+            throw new RuntimeException('Registro nao encontrado.');
+        }
+    }
+}
+
+function deleteWorkspaceVaultEntry(PDO $pdo, int $workspaceId, int $entryId): void
+{
+    if ($workspaceId <= 0 || $entryId <= 0) {
+        throw new RuntimeException('Registro invalido.');
+    }
+
+    $stmt = $pdo->prepare(
+        'DELETE FROM workspace_vault_entries
+         WHERE id = :id
+           AND workspace_id = :workspace_id'
+    );
+    $stmt->execute([
+        ':id' => $entryId,
+        ':workspace_id' => $workspaceId,
+    ]);
+
+    if ($stmt->rowCount() <= 0) {
+        throw new RuntimeException('Registro nao encontrado.');
+    }
+}
+
 function taskStatuses(): array
 {
     return [
@@ -1898,6 +2145,30 @@ function normalizeTaskTitle(string $value): string
     }
 
     return uppercaseFirstCharacter($value);
+}
+
+function normalizeVaultEntryLabel(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    if (mb_strlen($value) > 120) {
+        $value = mb_substr($value, 0, 120);
+    }
+
+    return uppercaseFirstCharacter($value);
+}
+
+function normalizeVaultFieldValue(string $value, int $maxLength): string
+{
+    $value = trim($value);
+    if ($maxLength > 0 && mb_strlen($value) > $maxLength) {
+        $value = mb_substr($value, 0, $maxLength);
+    }
+
+    return $value;
 }
 
 function dueDateForStorage(?string $value): ?string

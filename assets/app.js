@@ -2184,6 +2184,12 @@ window.addEventListener("DOMContentLoaded", () => {
   const fabMenu = document.querySelector("[data-task-fab-menu]");
   const taskGroupsDatalist = document.querySelector("#task-group-options");
   const taskFilterForm = document.querySelector("[data-task-filter-form]");
+  const dashboardViewPanels = Array.from(
+    document.querySelectorAll("[data-dashboard-view-panel]")
+  );
+  const dashboardViewToggleButtons = Array.from(
+    document.querySelectorAll("[data-dashboard-view-toggle]")
+  );
 
   const setFabMenuOpen = (open) => {
     if (!fabWrap || !fabToggleButton || !fabMenu) return;
@@ -2191,6 +2197,56 @@ window.addEventListener("DOMContentLoaded", () => {
     fabToggleButton.setAttribute("aria-expanded", open ? "true" : "false");
     fabMenu.setAttribute("aria-hidden", open ? "false" : "true");
   };
+
+  const normalizeDashboardView = (value) => {
+    return String(value || "").trim().toLowerCase() === "vault" ? "vault" : "tasks";
+  };
+
+  const dashboardViewFromHash = () => {
+    const rawHash = String(window.location.hash || "").replace(/^#/, "");
+    return normalizeDashboardView(rawHash);
+  };
+
+  const setDashboardView = (nextView, { updateHash = false } = {}) => {
+    if (!dashboardViewPanels.length) return;
+
+    const view = normalizeDashboardView(nextView);
+    dashboardViewPanels.forEach((panel) => {
+      if (!(panel instanceof HTMLElement)) return;
+      const panelView = normalizeDashboardView(panel.dataset.dashboardViewPanel || "");
+      panel.hidden = panelView !== view;
+    });
+
+    dashboardViewToggleButtons.forEach((button) => {
+      if (!(button instanceof HTMLElement)) return;
+      const buttonView = normalizeDashboardView(button.dataset.view || "");
+      const isActive = buttonView === view;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      button.setAttribute(
+        "aria-label",
+        isActive ? "Voltar para lista de tarefas" : "Abrir cofre de acessos"
+      );
+    });
+
+    if (document.body instanceof HTMLBodyElement) {
+      document.body.dataset.dashboardView = view;
+    }
+
+    if (updateHash) {
+      const targetHash = view === "vault" ? "#vault" : "#tasks";
+      if (window.location.hash !== targetHash) {
+        window.history.replaceState(null, "", targetHash);
+      }
+    }
+  };
+
+  if (dashboardViewPanels.length) {
+    setDashboardView(dashboardViewFromHash(), { updateHash: false });
+    window.addEventListener("hashchange", () => {
+      setDashboardView(dashboardViewFromHash(), { updateHash: false });
+    });
+  }
 
   const createTaskModal = document.querySelector("[data-create-modal]");
   const createTaskGroupInput = document.querySelector("[data-create-task-group-input]");
@@ -3280,6 +3336,33 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (fabWrap && fabWrap.classList.contains("is-open") && !target.closest("[data-task-fab-wrap]")) {
       setFabMenuOpen(false);
+    }
+
+    const dashboardViewToggle = target.closest("[data-dashboard-view-toggle]");
+    if (dashboardViewToggle instanceof HTMLElement) {
+      const currentView = normalizeDashboardView(
+        document.body?.dataset?.dashboardView || dashboardViewFromHash()
+      );
+      const targetView = normalizeDashboardView(dashboardViewToggle.dataset.view || "vault");
+      const nextView = currentView === targetView ? "tasks" : targetView;
+      setDashboardView(nextView, { updateHash: true });
+      return;
+    }
+
+    const vaultPasswordToggle = target.closest("[data-vault-password-toggle]");
+    if (vaultPasswordToggle instanceof HTMLButtonElement) {
+      const fieldWrap = vaultPasswordToggle.closest(".vault-password-field");
+      const passwordInput = fieldWrap?.querySelector("[data-vault-password-input]");
+      if (passwordInput instanceof HTMLInputElement) {
+        const showPassword = passwordInput.type === "password";
+        passwordInput.type = showPassword ? "text" : "password";
+        vaultPasswordToggle.textContent = showPassword ? "Ocultar" : "Ver";
+        vaultPasswordToggle.setAttribute(
+          "aria-label",
+          showPassword ? "Ocultar senha" : "Mostrar senha"
+        );
+      }
+      return;
     }
 
     const openTaskTrigger = target.closest("[data-open-create-task-modal]");

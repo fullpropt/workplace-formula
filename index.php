@@ -165,6 +165,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('success', 'Usuario adicionado ao workspace.');
                 redirectTo('index.php#tasks');
 
+            case 'create_vault_entry':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                createWorkspaceVaultEntry(
+                    $pdo,
+                    $workspaceId,
+                    (string) ($_POST['label'] ?? ''),
+                    (string) ($_POST['login_value'] ?? ''),
+                    (string) ($_POST['password_value'] ?? ''),
+                    (string) ($_POST['notes'] ?? ''),
+                    (int) $authUser['id']
+                );
+
+                flash('success', 'Item salvo no cofre.');
+                redirectTo('index.php#vault');
+
+            case 'update_vault_entry':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                $entryId = (int) ($_POST['entry_id'] ?? 0);
+                updateWorkspaceVaultEntry(
+                    $pdo,
+                    $workspaceId,
+                    $entryId,
+                    (string) ($_POST['label'] ?? ''),
+                    (string) ($_POST['login_value'] ?? ''),
+                    (string) ($_POST['password_value'] ?? ''),
+                    (string) ($_POST['notes'] ?? '')
+                );
+
+                flash('success', 'Item do cofre atualizado.');
+                redirectTo('index.php#vault');
+
+            case 'delete_vault_entry':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                $entryId = (int) ($_POST['entry_id'] ?? 0);
+                deleteWorkspaceVaultEntry($pdo, $workspaceId, $entryId);
+
+                flash('success', 'Item removido do cofre.');
+                redirectTo('index.php#vault');
+
             case 'create_group':
                 $authUser = requireAuth();
                 $workspaceId = activeWorkspaceId($authUser);
@@ -896,6 +950,7 @@ $statusOptions = taskStatuses();
 $priorityOptions = taskPriorities();
 $users = ($currentUser && $currentWorkspaceId !== null) ? usersList($currentWorkspaceId) : [];
 $workspaceMembers = ($currentUser && $currentWorkspaceId !== null) ? workspaceMembersList($currentWorkspaceId) : [];
+$vaultEntries = ($currentUser && $currentWorkspaceId !== null) ? workspaceVaultEntriesList($currentWorkspaceId) : [];
 $statusFilter = isset($_GET['status']) && trim((string) $_GET['status']) !== ''
     ? normalizeTaskStatus((string) $_GET['status'])
     : null;
@@ -942,8 +997,8 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=37">
-    <script src="assets/app.js?v=13" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=38">
+    <script src="assets/app.js?v=14" defer></script>
 </head>
 <body
     class="<?= $currentUser ? 'is-dashboard' : 'is-auth' ?>"

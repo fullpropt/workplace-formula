@@ -108,6 +108,16 @@
                 </ul>
             </div>
             <footer class="sidebar-footer">
+                <button
+                    type="button"
+                    class="sidebar-view-toggle"
+                    data-dashboard-view-toggle
+                    data-view="vault"
+                    aria-pressed="false"
+                >
+                    <span class="sidebar-view-toggle-icon" aria-hidden="true">&#128274;</span>
+                    <span class="sidebar-view-toggle-label">Cofre de acessos</span>
+                </button>
                 <a
                     href="workspace-settings.php"
                     class="icon-gear-button sidebar-settings-button"
@@ -121,7 +131,7 @@
             </footer>
         </aside>
 
-        <section class="tasklist-wrap panel" id="tasks">
+        <section class="tasklist-wrap panel" id="tasks" data-dashboard-view-panel="tasks">
             <div class="panel-header board-header">
                 <div>
                     <h2>Lista de tarefas</h2>
@@ -577,6 +587,119 @@
                                 <?php endforeach; ?>
                             </div>
                         </section>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <section class="vault-wrap panel" id="vault" data-dashboard-view-panel="vault" hidden>
+            <div class="panel-header board-header vault-header">
+                <div>
+                    <h2>Cofre de acessos</h2>
+                    <p>Guarde logins, senhas e anotacoes do workspace.</p>
+                </div>
+                <div class="board-summary">
+                    <span><?= e((string) count($vaultEntries)) ?> item(ns)</span>
+                </div>
+            </div>
+
+            <form method="post" class="vault-create-form">
+                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                <input type="hidden" name="action" value="create_vault_entry">
+
+                <label>
+                    <span>Nome</span>
+                    <input type="text" name="label" maxlength="120" placeholder="Ex.: Meta Ads" required>
+                </label>
+
+                <label>
+                    <span>Login</span>
+                    <input type="text" name="login_value" maxlength="220" placeholder="usuario@email.com">
+                </label>
+
+                <label>
+                    <span>Senha</span>
+                    <input type="text" name="password_value" maxlength="220" placeholder="Senha ou token">
+                </label>
+
+                <label class="vault-create-notes">
+                    <span>Anotacoes</span>
+                    <textarea name="notes" rows="2" placeholder="Anotacoes adicionais..."></textarea>
+                </label>
+
+                <div class="vault-create-actions">
+                    <button type="submit" class="btn btn-mini">Salvar no cofre</button>
+                </div>
+            </form>
+
+            <div class="vault-list">
+                <?php if (!$vaultEntries): ?>
+                    <div class="empty-card">
+                        <p>Nenhum item no cofre ainda.</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($vaultEntries as $vaultEntry): ?>
+                        <?php
+                        $vaultEntryId = (int) ($vaultEntry['id'] ?? 0);
+                        $vaultUpdatedAtLabel = '';
+                        if (!empty($vaultEntry['updated_at'])) {
+                            $vaultUpdatedAtLabel = (new DateTimeImmutable((string) $vaultEntry['updated_at']))->format('d/m H:i');
+                        }
+                        ?>
+                        <article class="vault-item">
+                            <form method="post" class="vault-item-form">
+                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                <input type="hidden" name="action" value="update_vault_entry">
+                                <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
+
+                                <div class="vault-item-grid">
+                                    <label>
+                                        <span>Nome</span>
+                                        <input type="text" name="label" maxlength="120" value="<?= e((string) ($vaultEntry['label'] ?? '')) ?>" required>
+                                    </label>
+
+                                    <label>
+                                        <span>Login</span>
+                                        <input type="text" name="login_value" maxlength="220" value="<?= e((string) ($vaultEntry['login_value'] ?? '')) ?>">
+                                    </label>
+
+                                    <label class="vault-password-wrap">
+                                        <span>Senha</span>
+                                        <div class="vault-password-field">
+                                            <input type="password" name="password_value" maxlength="220" value="<?= e((string) ($vaultEntry['password_value'] ?? '')) ?>" data-vault-password-input>
+                                            <button type="button" class="vault-password-toggle" data-vault-password-toggle aria-label="Mostrar senha">Ver</button>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <label>
+                                    <span>Anotacoes</span>
+                                    <textarea name="notes" rows="3"><?= e((string) ($vaultEntry['notes'] ?? '')) ?></textarea>
+                                </label>
+
+                                <div class="vault-item-footer">
+                                    <div class="vault-item-meta">
+                                        <?php if (!empty($vaultEntry['created_by_name'])): ?>
+                                            <span>Criado por <?= e((string) $vaultEntry['created_by_name']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($vaultUpdatedAtLabel !== ''): ?>
+                                            <span>Atualizado em <?= e($vaultUpdatedAtLabel) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="vault-item-actions">
+                                        <button type="submit" class="btn btn-mini">Salvar</button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <form method="post" class="vault-item-delete-form">
+                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                <input type="hidden" name="action" value="delete_vault_entry">
+                                <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
+                                <button type="submit" class="btn btn-mini btn-danger">Remover</button>
+                            </form>
+                        </article>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
