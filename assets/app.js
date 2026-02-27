@@ -80,13 +80,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const taskStatusSortRank = (status) => {
     switch ((status || "").trim()) {
-      case "done":
-        return 1;
       case "review":
-        return 2;
+        return 1;
       case "in_progress":
-        return 3;
+        return 2;
       case "todo":
+        return 3;
+      case "done":
         return 4;
       default:
         return 99;
@@ -366,6 +366,24 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    if (
+      !target.matches(
+        "[data-task-detail-edit-description], [data-task-autosave-form] textarea[name=\"description\"]"
+      )
+    ) {
+      return;
+    }
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "b") {
+      return;
+    }
+
+    event.preventDefault();
+    wrapSelectionWithBoldMarkdown(target);
+  });
+
   const toLocalIsoDate = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -423,6 +441,71 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!(textarea instanceof HTMLTextAreaElement)) return;
     textarea.style.height = "0px";
     textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  const escapeHtml = (value) =>
+    String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+
+  const formatTaskDescriptionInlineHtml = (value) =>
+    escapeHtml(value).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+  const formatTaskDescriptionHtml = (value) => {
+    const lines = String(value || "").replace(/\r/g, "").split("\n");
+    const parts = [];
+    const listItems = [];
+
+    const flushList = () => {
+      if (!listItems.length) return;
+      parts.push(
+        `<ul class="task-detail-description-list">${listItems
+          .map((item) => `<li>${formatTaskDescriptionInlineHtml(item)}</li>`)
+          .join("")}</ul>`
+      );
+      listItems.length = 0;
+    };
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) {
+        flushList();
+        return;
+      }
+
+      const listMatch = line.match(/^-\s+(.+)$/);
+      if (listMatch) {
+        listItems.push(listMatch[1].trim());
+        return;
+      }
+
+      flushList();
+      parts.push(`<p>${formatTaskDescriptionInlineHtml(line)}</p>`);
+    });
+
+    flushList();
+    return parts.join("");
+  };
+
+  const wrapSelectionWithBoldMarkdown = (textarea) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+    const start = Number.isFinite(textarea.selectionStart) ? textarea.selectionStart : 0;
+    const end = Number.isFinite(textarea.selectionEnd) ? textarea.selectionEnd : start;
+    const selected = textarea.value.slice(start, end);
+
+    if (selected) {
+      textarea.setRangeText(`**${selected}**`, start, end, "end");
+      textarea.setSelectionRange(start + 2, start + 2 + selected.length);
+    } else {
+      textarea.setRangeText("****", start, end, "end");
+      textarea.setSelectionRange(start + 2, start + 2);
+    }
+
+    autoResizeTextarea(textarea);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
   const parseReferenceLines = (value) => {
@@ -1461,7 +1544,11 @@ window.addEventListener("DOMContentLoaded", () => {
         : "Sem responsavel";
     }
     if (taskDetailViewDescription) {
-      taskDetailViewDescription.textContent = description || "Sem descricao.";
+      if (description) {
+        taskDetailViewDescription.innerHTML = formatTaskDescriptionHtml(description);
+      } else {
+        taskDetailViewDescription.textContent = "Sem descricao.";
+      }
       taskDetailViewDescription.classList.toggle("is-empty", !description);
     }
     renderTaskDetailReferencesView({ links: referenceLinks, images: referenceImages });
@@ -1604,14 +1691,42 @@ window.addEventListener("DOMContentLoaded", () => {
     return true;
   };
 
+  const waitForFormAutosaveIdle = async (form, timeoutMs = 8000) => {
+    if (!(form instanceof HTMLFormElement)) return false;
+    const startedAt = Date.now();
+
+    while (form.dataset.autosaveSubmitting === "1") {
+      if (Date.now() - startedAt > timeoutMs) {
+        return false;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 70));
+    }
+
+    return true;
+  };
+
   const saveTaskDetailModal = async () => {
     if (!taskDetailContext) return;
     if (!copyTaskDetailModalToRow(taskDetailContext)) return;
+    setTaskDetailEditMode(false);
 
     if (taskDetailSaveButton instanceof HTMLButtonElement) {
       taskDetailSaveButton.disabled = true;
       taskDetailSaveButton.classList.add("is-loading");
       taskDetailSaveButton.textContent = "Salvando";
+    }
+
+    if (taskDetailContext.form.dataset.autosaveSubmitting === "1") {
+      const idle = await waitForFormAutosaveIdle(taskDetailContext.form);
+      if (!idle) {
+        if (taskDetailSaveButton instanceof HTMLButtonElement) {
+          taskDetailSaveButton.disabled = false;
+          taskDetailSaveButton.classList.remove("is-loading");
+          taskDetailSaveButton.textContent = "Salvar";
+        }
+        setTaskDetailEditMode(true);
+        return;
+      }
     }
 
     const ok = await submitTaskAutosave(taskDetailContext.form);
@@ -1622,7 +1737,10 @@ window.addEventListener("DOMContentLoaded", () => {
       taskDetailSaveButton.textContent = "Salvar";
     }
 
-    if (!ok) return;
+    if (!ok) {
+      setTaskDetailEditMode(true);
+      return;
+    }
 
     populateTaskDetailModalFromRow(taskDetailContext);
     setTaskDetailEditMode(false);

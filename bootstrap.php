@@ -987,10 +987,10 @@ function allTasks(): array
             ORDER BY
                 t.group_name ASC,
                 CASE t.status
-                    WHEN \'done\' THEN 1
-                    WHEN \'review\' THEN 2
-                    WHEN \'in_progress\' THEN 3
-                    WHEN \'todo\' THEN 4
+                    WHEN \'review\' THEN 1
+                    WHEN \'in_progress\' THEN 2
+                    WHEN \'todo\' THEN 3
+                    WHEN \'done\' THEN 4
                     ELSE 5
                 END,
                 CASE t.priority

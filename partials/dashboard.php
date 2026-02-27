@@ -696,12 +696,12 @@
 
                     <div class="task-detail-edit-references">
                         <label>
-                            <span>Links de referencia (um por linha)</span>
+                            <span>Links de referencia</span>
                             <textarea rows="3" data-task-detail-edit-links></textarea>
                         </label>
 
                         <label>
-                            <span>Imagens de referencia (URLs, uma por linha)</span>
+                            <span>Imagens de referencia</span>
                             <textarea rows="3" data-task-detail-edit-images></textarea>
                         </label>
                     </div>
