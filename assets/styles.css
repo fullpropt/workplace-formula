@@ -143,8 +143,13 @@ select optgroup {
 }
 
 .dashboard-nav {
-    gap: 14px;
-    padding: 10px 18px;
+    gap: 10px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 14% 0%, rgba(255, 132, 167, 0.16), transparent 42%),
+        radial-gradient(circle at 100% 0%, rgba(0, 194, 255, 0.16), transparent 38%),
+        rgba(6, 10, 22, 0.7);
 }
 
 .auth-nav {
@@ -219,7 +224,7 @@ select optgroup {
 }
 
 .dashboard-nav .brand-lockup {
-    width: clamp(72px, 6.2vw, 92px);
+    width: clamp(68px, 5.5vw, 86px);
     filter:
         brightness(0)
         invert(1)
@@ -865,25 +870,85 @@ textarea:focus {
 
 .dashboard-nav .user-chip {
     gap: 8px;
-    padding: 5px 8px 5px 5px;
+    padding: 4px 8px 4px 4px;
 }
 
 .dashboard-nav .avatar {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
+    font-size: 0.82rem;
 }
 
 .dashboard-nav .user-chip strong {
-    font-size: 0.86rem;
+    font-size: 0.82rem;
 }
 
 .dashboard-nav .user-chip span {
-    font-size: 0.74rem;
+    font-size: 0.7rem;
 }
 
 .dashboard-nav .btn-pill {
-    min-height: 38px;
-    padding-inline: 16px;
+    min-height: 34px;
+    padding-inline: 13px;
+}
+
+.dashboard-nav form {
+    justify-self: end;
+}
+
+.btn-logout {
+    position: relative;
+    overflow: hidden;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #dcf4ff;
+    border-color: rgba(70, 210, 255, 0.34);
+    background:
+        radial-gradient(circle at 0 50%, rgba(255, 122, 171, 0.15), transparent 40%),
+        linear-gradient(135deg, rgba(8, 22, 43, 0.96), rgba(5, 13, 29, 0.96));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 8px 20px rgba(2, 8, 20, 0.42);
+}
+
+.btn-logout::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff86c3, #55dcff);
+    box-shadow: 0 0 10px rgba(120, 218, 255, 0.55);
+    position: relative;
+    z-index: 1;
+    margin-right: 2px;
+}
+
+.btn-logout::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 0%, rgba(120, 218, 255, 0.2) 40%, transparent 72%);
+    transform: translateX(-120%);
+    transition: transform 280ms ease;
+}
+
+.btn-logout > span {
+    position: relative;
+    z-index: 1;
+}
+
+.btn-logout:hover,
+.btn-logout:focus-visible {
+    color: #f1fbff;
+    border-color: rgba(120, 225, 255, 0.56);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        0 10px 24px rgba(6, 18, 42, 0.52);
+}
+
+.btn-logout:hover::after,
+.btn-logout:focus-visible::after {
+    transform: translateX(120%);
 }
 
 .user-chip strong {
@@ -2861,6 +2926,10 @@ textarea:focus {
     font-weight: 700;
 }
 
+.task-detail-view-description em {
+    font-style: italic;
+}
+
 .task-detail-view-description.is-empty {
     color: var(--muted);
 }
@@ -2999,10 +3068,97 @@ textarea:focus {
     gap: 12px;
 }
 
-.task-detail-edit [data-task-detail-edit-description] {
+.task-detail-edit-description-wrap {
+    position: relative;
+}
+
+.task-detail-edit-description-toolbar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(6, 10, 20, 0.95);
+    backdrop-filter: blur(12px);
+}
+
+.task-detail-edit-description-toolbar button {
+    min-height: 26px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.88);
+    padding: 4px 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.task-detail-edit-description-toolbar button:hover,
+.task-detail-edit-description-toolbar button:focus-visible {
+    border-color: rgba(120, 204, 255, 0.34);
+    background: rgba(120, 204, 255, 0.12);
+    outline: none;
+}
+
+.task-detail-edit-description-editor {
     min-height: 180px;
-    resize: none;
-    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 12px;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.45;
+    word-break: break-word;
+    white-space: normal;
+    outline: none;
+}
+
+.task-detail-edit-description-editor:focus {
+    border-color: rgba(120, 204, 255, 0.45);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.task-detail-edit-description-editor:empty::before {
+    content: "Escreva a descricao...";
+    color: rgba(255, 255, 255, 0.36);
+}
+
+.task-detail-edit-description-editor p {
+    margin: 0 0 8px;
+}
+
+.task-detail-edit-description-editor p:last-child {
+    margin-bottom: 0;
+}
+
+.task-detail-edit-description-editor ul {
+    margin: 0 0 8px;
+    padding-left: 18px;
+    display: grid;
+    gap: 5px;
+}
+
+.task-detail-edit-description-editor ul:last-child {
+    margin-bottom: 0;
+}
+
+.task-detail-edit-description-editor strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.task-detail-edit-description-editor em {
+    font-style: italic;
+}
+
+.task-detail-edit [data-task-detail-edit-description] {
+    display: none;
 }
 
 .task-detail-edit [data-task-detail-edit-links],

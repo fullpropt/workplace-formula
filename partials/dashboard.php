@@ -12,7 +12,7 @@
     <form method="post">
         <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
         <input type="hidden" name="action" value="logout">
-        <button type="submit" class="btn btn-pill btn-light">Sair</button>
+        <button type="submit" class="btn btn-pill btn-logout"><span>Sair</span></button>
     </form>
 </header>
 
@@ -691,7 +691,21 @@
 
                     <label>
                         <span>Descricao</span>
-                        <textarea rows="5" data-task-detail-edit-description></textarea>
+                        <div class="task-detail-edit-description-wrap" data-task-detail-edit-description-wrap>
+                            <div class="task-detail-edit-description-toolbar" data-task-detail-edit-description-toolbar hidden>
+                                <button type="button" data-task-detail-description-format="bold">Negrito</button>
+                                <button type="button" data-task-detail-description-format="italic">Italico</button>
+                            </div>
+                            <div
+                                class="task-detail-edit-description-editor"
+                                data-task-detail-edit-description-editor
+                                contenteditable="true"
+                                role="textbox"
+                                aria-multiline="true"
+                                aria-label="Descricao da tarefa"
+                            ></div>
+                        </div>
+                        <textarea rows="5" data-task-detail-edit-description hidden></textarea>
                     </label>
 
                     <div class="task-detail-edit-references">
