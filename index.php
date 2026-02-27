@@ -140,6 +140,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $taskCountStmt = $pdo->prepare('SELECT COUNT(*) FROM tasks WHERE group_name = :group_name');
                 $taskCountStmt->execute([':group_name' => $existingOldGroupName]);
                 $affectedTaskCount = (int) $taskCountStmt->fetchColumn();
+                $affectedTaskIds = [];
+                $renameUpdatedAt = nowIso();
+
+                if ($affectedTaskCount > 0 && $existingOldGroupName !== $newGroupName) {
+                    $taskIdsStmt = $pdo->prepare('SELECT id FROM tasks WHERE group_name = :group_name');
+                    $taskIdsStmt->execute([':group_name' => $existingOldGroupName]);
+                    $affectedTaskIds = array_map(
+                        'intval',
+                        array_column($taskIdsStmt->fetchAll(), 'id')
+                    );
+                }
 
                 $pdo->beginTransaction();
                 try {
@@ -155,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ]);
                     }
 
-                    if ($affectedTaskCount > 0) {
+                    if ($affectedTaskCount > 0 && $existingOldGroupName !== $newGroupName) {
                         $renameTasksStmt = $pdo->prepare(
                             'UPDATE tasks
                              SET group_name = :new_group_name, updated_at = :updated_at
@@ -163,9 +174,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                         $renameTasksStmt->execute([
                             ':new_group_name' => $newGroupName,
-                            ':updated_at' => nowIso(),
+                            ':updated_at' => $renameUpdatedAt,
                             ':old_group_name' => $existingOldGroupName,
                         ]);
+
+                        foreach ($affectedTaskIds as $affectedTaskId) {
+                            if ($affectedTaskId <= 0) {
+                                continue;
+                            }
+
+                            logTaskHistory(
+                                $pdo,
+                                $affectedTaskId,
+                                'group_changed',
+                                ['old' => $existingOldGroupName, 'new' => $newGroupName],
+                                (int) $authUser['id'],
+                                $renameUpdatedAt
+                            );
+                        }
                     }
 
                     $pdo->commit();
@@ -189,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirectTo('index.php#tasks');
 
             case 'delete_group':
-                requireAuth();
+                $authUser = requireAuth();
                 $groupName = normalizeTaskGroupName((string) ($_POST['group_name'] ?? ''));
                 $existingGroupName = findTaskGroupByName($groupName);
                 $fallbackGroupName = defaultTaskGroupName();
@@ -205,6 +231,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $countStmt = $pdo->prepare('SELECT COUNT(*) FROM tasks WHERE group_name = :group_name');
                 $countStmt->execute([':group_name' => $existingGroupName]);
                 $taskCount = (int) $countStmt->fetchColumn();
+                $movedTaskIds = [];
+                $movedUpdatedAt = nowIso();
+                if ($taskCount > 0) {
+                    $taskIdsStmt = $pdo->prepare('SELECT id FROM tasks WHERE group_name = :group_name');
+                    $taskIdsStmt->execute([':group_name' => $existingGroupName]);
+                    $movedTaskIds = array_map(
+                        'intval',
+                        array_column($taskIdsStmt->fetchAll(), 'id')
+                    );
+                }
                 upsertTaskGroup($pdo, $fallbackGroupName, null);
 
                 if ($taskCount > 0) {
@@ -215,9 +251,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                     $moveStmt->execute([
                         ':target_group' => $fallbackGroupName,
-                        ':updated_at' => nowIso(),
+                        ':updated_at' => $movedUpdatedAt,
                         ':source_group' => $existingGroupName,
                     ]);
+
+                    foreach ($movedTaskIds as $movedTaskId) {
+                        if ($movedTaskId <= 0) {
+                            continue;
+                        }
+
+                        logTaskHistory(
+                            $pdo,
+                            $movedTaskId,
+                            'group_changed',
+                            ['old' => $existingGroupName, 'new' => $fallbackGroupName],
+                            (int) $authUser['id'],
+                            $movedUpdatedAt
+                        );
+                    }
                 }
 
                 $deleteStmt = $pdo->prepare('DELETE FROM task_groups WHERE name = :name');
@@ -256,6 +307,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $referenceImages = $referenceImagesPosted
                     ? decodeReferenceUrlList((string) ($_POST['reference_images_json'] ?? '[]'))
                     : null;
+                $overdueFlagPosted = array_key_exists('overdue_flag', $_POST);
+                $overdueFlag = $overdueFlagPosted
+                    ? (((int) ($_POST['overdue_flag'] ?? 0)) === 1 ? 1 : 0)
+                    : null;
+                $overdueSinceDate = dueDateForStorage((string) ($_POST['overdue_since_date'] ?? ''));
                 $status = normalizeTaskStatus((string) ($_POST['status'] ?? 'todo'));
                 $priority = normalizeTaskPriority((string) ($_POST['priority'] ?? 'medium'));
                 $dueDate = dueDateForStorage($_POST['due_date'] ?? null);
@@ -281,21 +337,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 upsertTaskGroup($pdo, $groupName, (int) $authUser['id']);
 
                 if ($title === '') {
-                    throw new RuntimeException('O título da tarefa é obrigatório.');
+                    throw new RuntimeException('O titulo da tarefa e obrigatorio.');
                 }
                 if (mb_strlen($title) > 140) {
-                    throw new RuntimeException('O título deve ter no máximo 140 caracteres.');
+                    throw new RuntimeException('O titulo deve ter no maximo 140 caracteres.');
                 }
                 if (count($submittedAssigneeIds) !== count($assigneeIds)) {
-                    throw new RuntimeException('Um ou mais responsáveis selecionados são inválidos.');
+                    throw new RuntimeException('Um ou mais responsaveis selecionados sao invalidos.');
                 }
 
                 if ($action === 'create_task') {
+                    $normalized = normalizeTaskOverdueState(
+                        $status,
+                        $priority,
+                        $dueDate,
+                        $overdueFlag ?? 0,
+                        $overdueSinceDate
+                    );
+                    $status = $normalized['status'];
+                    $priority = $normalized['priority'];
+                    $dueDate = $normalized['due_date'];
+                    $overdueFlag = $normalized['overdue_flag'];
+                    $overdueSinceDate = $normalized['overdue_since_date'];
                     $referenceLinks ??= [];
                     $referenceImages ??= [];
                     $stmt = $pdo->prepare(
-                        'INSERT INTO tasks (title, description, status, priority, due_date, created_by, assigned_to, assignee_ids_json, reference_links_json, reference_images_json, group_name, created_at, updated_at)
-                         VALUES (:t, :d, :s, :p, :dd, :cb, :at, :aj, :rl, :ri, :g, :c, :u)'
+                        'INSERT INTO tasks (title, description, status, priority, due_date, overdue_flag, overdue_since_date, created_by, assigned_to, assignee_ids_json, reference_links_json, reference_images_json, group_name, created_at, updated_at)
+                         VALUES (:t, :d, :s, :p, :dd, :of, :osd, :cb, :at, :aj, :rl, :ri, :g, :c, :u)'
                     );
                     $now = nowIso();
                     $stmt->execute([
@@ -304,6 +372,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':s' => $status,
                         ':p' => $priority,
                         ':dd' => $dueDate,
+                        ':of' => $overdueFlag,
+                        ':osd' => $overdueSinceDate,
                         ':cb' => (int) $authUser['id'],
                         ':at' => $assignedTo,
                         ':aj' => $assigneeIdsJson,
@@ -313,32 +383,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':c' => $now,
                         ':u' => $now,
                     ]);
+                    $createdTaskId = (int) $pdo->lastInsertId();
+                    if ($createdTaskId > 0) {
+                        logTaskHistory(
+                            $pdo,
+                            $createdTaskId,
+                            'created',
+                            [
+                                'title' => $title,
+                                'status' => $status,
+                                'priority' => $priority,
+                                'due_date' => $dueDate,
+                            ],
+                            (int) $authUser['id'],
+                            $now
+                        );
+
+                        if ($overdueFlag === 1) {
+                            logTaskHistory(
+                                $pdo,
+                                $createdTaskId,
+                                'overdue_started',
+                                [
+                                    'previous_due_date' => $dueDate,
+                                    'new_due_date' => $dueDate,
+                                    'overdue_since_date' => $overdueSinceDate,
+                                    'overdue_days' => taskOverdueDays($overdueSinceDate),
+                                ],
+                                (int) $authUser['id'],
+                                $now
+                            );
+                        }
+                    }
                     flash('success', 'Tarefa criada.');
                     redirectTo('index.php#tasks');
                 }
 
                 if ($taskId <= 0) {
-                    throw new RuntimeException('Tarefa inválida.');
+                    throw new RuntimeException('Tarefa invalida.');
                 }
-                if ($referenceLinks === null || $referenceImages === null) {
-                    $existingTaskStmt = $pdo->prepare(
-                        'SELECT reference_links_json, reference_images_json
-                         FROM tasks
-                         WHERE id = :id
-                         LIMIT 1'
-                    );
-                    $existingTaskStmt->execute([':id' => $taskId]);
-                    $existingTaskRow = $existingTaskStmt->fetch();
-                    if (!$existingTaskRow) {
-                        throw new RuntimeException('Tarefa invalida.');
-                    }
-                    if ($referenceLinks === null) {
-                        $referenceLinks = decodeReferenceUrlList($existingTaskRow['reference_links_json'] ?? null);
-                    }
-                    if ($referenceImages === null) {
-                        $referenceImages = decodeReferenceUrlList($existingTaskRow['reference_images_json'] ?? null);
-                    }
+                $existingTaskStmt = $pdo->prepare(
+                    'SELECT title, status, priority, due_date, overdue_flag, overdue_since_date, assignee_ids_json, group_name, reference_links_json, reference_images_json
+                     FROM tasks
+                     WHERE id = :id
+                     LIMIT 1'
+                );
+                $existingTaskStmt->execute([':id' => $taskId]);
+                $existingTaskRow = $existingTaskStmt->fetch();
+                if (!$existingTaskRow) {
+                    throw new RuntimeException('Tarefa invalida.');
                 }
+                if ($referenceLinks === null) {
+                    $referenceLinks = decodeReferenceUrlList($existingTaskRow['reference_links_json'] ?? null);
+                }
+                if ($referenceImages === null) {
+                    $referenceImages = decodeReferenceUrlList($existingTaskRow['reference_images_json'] ?? null);
+                }
+                if ($overdueFlag === null) {
+                    $overdueFlag = ((int) ($existingTaskRow['overdue_flag'] ?? 0)) === 1 ? 1 : 0;
+                }
+                if ($overdueSinceDate === null) {
+                    $overdueSinceDate = dueDateForStorage((string) ($existingTaskRow['overdue_since_date'] ?? ''));
+                }
+
+                $normalized = normalizeTaskOverdueState(
+                    $status,
+                    $priority,
+                    $dueDate,
+                    $overdueFlag ?? 0,
+                    $overdueSinceDate
+                );
+                $status = $normalized['status'];
+                $priority = $normalized['priority'];
+                $dueDate = $normalized['due_date'];
+                $overdueFlag = $normalized['overdue_flag'];
+                $overdueSinceDate = $normalized['overdue_since_date'];
+                $overdueDays = (int) ($normalized['overdue_days'] ?? 0);
 
                 $stmt = $pdo->prepare(
                     'UPDATE tasks
@@ -347,6 +467,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          status = :s,
                          priority = :p,
                          due_date = :dd,
+                         overdue_flag = :of,
+                         overdue_since_date = :osd,
                          assigned_to = :at,
                          assignee_ids_json = :aj,
                          reference_links_json = :rl,
@@ -362,6 +484,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':s' => $status,
                     ':p' => $priority,
                     ':dd' => $dueDate,
+                    ':of' => $overdueFlag,
+                    ':osd' => $overdueSinceDate,
                     ':at' => $assignedTo,
                     ':aj' => $assigneeIdsJson,
                     ':rl' => encodeReferenceUrlList($referenceLinks ?? []),
@@ -370,6 +494,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':u' => $updatedAt,
                     ':id' => $taskId,
                 ]);
+
+                $existingStatus = normalizeTaskStatus((string) ($existingTaskRow['status'] ?? 'todo'));
+                $existingPriority = normalizeTaskPriority((string) ($existingTaskRow['priority'] ?? 'medium'));
+                $existingTitle = trim((string) ($existingTaskRow['title'] ?? ''));
+                $existingDueDate = dueDateForStorage((string) ($existingTaskRow['due_date'] ?? ''));
+                $existingGroup = normalizeTaskGroupName((string) ($existingTaskRow['group_name'] ?? 'Geral'));
+                $existingOverdueFlag = ((int) ($existingTaskRow['overdue_flag'] ?? 0)) === 1 ? 1 : 0;
+                $existingOverdueSinceDate = dueDateForStorage((string) ($existingTaskRow['overdue_since_date'] ?? ''));
+                $existingAssigneeIds = decodeAssigneeIds($existingTaskRow['assignee_ids_json'] ?? null);
+                $actorUserId = (int) $authUser['id'];
+                $statusOptions = taskStatuses();
+                $priorityOptions = taskPriorities();
+
+                if ($existingTitle !== $title) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'title_changed',
+                        ['old' => $existingTitle, 'new' => $title],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingStatus !== $status) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'status_changed',
+                        [
+                            'old' => $existingStatus,
+                            'new' => $status,
+                            'old_label' => $statusOptions[$existingStatus] ?? $existingStatus,
+                            'new_label' => $statusOptions[$status] ?? $status,
+                        ],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingPriority !== $priority) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'priority_changed',
+                        [
+                            'old' => $existingPriority,
+                            'new' => $priority,
+                            'old_label' => $priorityOptions[$existingPriority] ?? $existingPriority,
+                            'new_label' => $priorityOptions[$priority] ?? $priority,
+                        ],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingDueDate !== $dueDate) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'due_date_changed',
+                        ['old' => $existingDueDate, 'new' => $dueDate],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingGroup !== $groupName) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'group_changed',
+                        ['old' => $existingGroup, 'new' => $groupName],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingAssigneeIds !== $assigneeIds) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'assignees_changed',
+                        ['old' => $existingAssigneeIds, 'new' => $assigneeIds],
+                        $actorUserId,
+                        $updatedAt
+                    );
+                }
+                if ($existingOverdueFlag !== $overdueFlag) {
+                    if ($overdueFlag === 1) {
+                        logTaskHistory(
+                            $pdo,
+                            $taskId,
+                            'overdue_started',
+                            [
+                                'previous_due_date' => $existingDueDate,
+                                'new_due_date' => $dueDate,
+                                'overdue_since_date' => $overdueSinceDate,
+                                'overdue_days' => $overdueDays,
+                            ],
+                            $actorUserId,
+                            $updatedAt
+                        );
+                    } else {
+                        logTaskHistory(
+                            $pdo,
+                            $taskId,
+                            'overdue_cleared',
+                            [
+                                'previous_overdue_since_date' => $existingOverdueSinceDate,
+                                'previous_overdue_days' => taskOverdueDays($existingOverdueSinceDate),
+                            ],
+                            $actorUserId,
+                            $updatedAt
+                        );
+                    }
+                }
+
+                $taskHistory = taskHistoryList($taskId);
                 if ($isAutosave && requestExpectsJson()) {
                     respondJson([
                         'ok' => true,
@@ -377,8 +615,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'id' => $taskId,
                             'group_name' => $groupName,
                             'due_date' => $dueDate,
+                            'status' => $status,
+                            'priority' => $priority,
+                            'overdue_flag' => $overdueFlag,
+                            'overdue_since_date' => $overdueSinceDate,
+                            'overdue_days' => $overdueDays,
                             'reference_links_json' => encodeReferenceUrlList($referenceLinks ?? []),
                             'reference_images_json' => encodeReferenceUrlList($referenceImages ?? []),
+                            'history' => $taskHistory,
                             'updated_at' => $updatedAt,
                             'updated_at_label' => (new DateTimeImmutable($updatedAt))->format('d/m H:i'),
                         ],
@@ -391,14 +635,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirectTo('index.php#task-' . $taskId);
 
             case 'move_task':
-                requireAuth();
+                $authUser = requireAuth();
                 $taskId = (int) ($_POST['task_id'] ?? 0);
                 if ($taskId <= 0) {
-                    throw new RuntimeException('Tarefa inválida.');
+                    throw new RuntimeException('Tarefa invalida.');
                 }
+
+                $existingTaskStmt = $pdo->prepare(
+                    'SELECT status, overdue_flag, overdue_since_date
+                     FROM tasks
+                     WHERE id = :id
+                     LIMIT 1'
+                );
+                $existingTaskStmt->execute([':id' => $taskId]);
+                $existingTaskRow = $existingTaskStmt->fetch();
+                if (!$existingTaskRow) {
+                    throw new RuntimeException('Tarefa invalida.');
+                }
+
+                $existingStatus = normalizeTaskStatus((string) ($existingTaskRow['status'] ?? 'todo'));
+                $existingOverdueFlag = ((int) ($existingTaskRow['overdue_flag'] ?? 0)) === 1 ? 1 : 0;
+                $existingOverdueSinceDate = dueDateForStorage((string) ($existingTaskRow['overdue_since_date'] ?? ''));
                 $status = normalizeTaskStatus((string) ($_POST['status'] ?? 'todo'));
-                $stmt = $pdo->prepare('UPDATE tasks SET status = :s, updated_at = :u WHERE id = :id');
-                $stmt->execute([':s' => $status, ':u' => nowIso(), ':id' => $taskId]);
+                $updatedAt = nowIso();
+                $stmt = $pdo->prepare(
+                    'UPDATE tasks
+                     SET status = :s,
+                         overdue_flag = CASE WHEN :s = :done THEN 0 ELSE overdue_flag END,
+                         overdue_since_date = CASE WHEN :s = :done THEN NULL ELSE overdue_since_date END,
+                         updated_at = :u
+                     WHERE id = :id'
+                );
+                $stmt->execute([
+                    ':s' => $status,
+                    ':done' => 'done',
+                    ':u' => $updatedAt,
+                    ':id' => $taskId,
+                ]);
+
+                $statusOptions = taskStatuses();
+                if ($existingStatus !== $status) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'status_changed',
+                        [
+                            'old' => $existingStatus,
+                            'new' => $status,
+                            'old_label' => $statusOptions[$existingStatus] ?? $existingStatus,
+                            'new_label' => $statusOptions[$status] ?? $status,
+                        ],
+                        (int) $authUser['id'],
+                        $updatedAt
+                    );
+                }
+
+                if ($status === 'done' && $existingOverdueFlag === 1) {
+                    logTaskHistory(
+                        $pdo,
+                        $taskId,
+                        'overdue_cleared',
+                        [
+                            'previous_overdue_since_date' => $existingOverdueSinceDate,
+                            'previous_overdue_days' => taskOverdueDays($existingOverdueSinceDate),
+                        ],
+                        (int) $authUser['id'],
+                        $updatedAt
+                    );
+                }
+
+                if (requestExpectsJson()) {
+                    respondJson([
+                        'ok' => true,
+                        'task_id' => $taskId,
+                        'status' => $status,
+                        'dashboard' => dashboardSummaryPayloadForUser((int) $authUser['id']),
+                    ]);
+                }
                 flash('success', 'Status atualizado.');
                 redirectTo('index.php#task-' . $taskId);
 
@@ -446,6 +759,10 @@ $statusFilter = isset($_GET['status']) && trim((string) $_GET['status']) !== ''
 $assigneeFilterId = isset($_GET['assignee']) ? (int) $_GET['assignee'] : null;
 $assigneeFilterId = $assigneeFilterId && $assigneeFilterId > 0 ? $assigneeFilterId : null;
 
+if ($currentUser) {
+    applyOverdueTaskPolicy();
+}
+
 $allTasks = $currentUser ? allTasks() : [];
 $tasks = $currentUser ? filterTasks($allTasks, $statusFilter, $assigneeFilterId) : [];
 $taskGroups = $currentUser ? taskGroupsList() : ['Geral'];
@@ -482,8 +799,8 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=27">
-    <script src="assets/app.js?v=11" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=29">
+    <script src="assets/app.js?v=13" defer></script>
 </head>
 <body class="<?= $currentUser ? 'is-dashboard' : 'is-auth' ?>" data-default-group-name="<?= e((string) $protectedGroupName) ?>">
     <div class="bg-layer bg-layer-one" aria-hidden="true"></div>

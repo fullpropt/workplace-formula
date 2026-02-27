@@ -215,9 +215,10 @@
                                     $assigneeSummary = assigneeNamesSummary($task);
                                     $dueDateValue = (string) ($task['due_date'] ?? '');
                                     $dueDateUi = taskDueDatePresentation($dueDateValue);
+                                    $isOverdueMarked = ((int) ($task['overdue_flag'] ?? 0)) === 1;
                                     ?>
                                     <article
-                                        class="task-list-item task-status-<?= e($statusKey) ?>"
+                                        class="task-list-item task-status-<?= e($statusKey) ?><?= $isOverdueMarked ? ' has-overdue-flag' : '' ?>"
                                         id="task-<?= e((string) $taskId) ?>"
                                         data-task-item
                                         data-group-name="<?= e((string) ($task['group_name'] ?? 'Geral')) ?>"
@@ -230,6 +231,10 @@
                                             <input type="hidden" name="autosave" value="1">
                                             <input type="hidden" name="reference_links_json" value="<?= e(encodeReferenceUrlList($task['reference_links'] ?? [])) ?>" data-task-reference-links-json>
                                             <input type="hidden" name="reference_images_json" value="<?= e(encodeReferenceUrlList($task['reference_images'] ?? [])) ?>" data-task-reference-images-json>
+                                            <input type="hidden" name="overdue_flag" value="<?= $isOverdueMarked ? '1' : '0' ?>" data-task-overdue-flag>
+                                            <input type="hidden" name="overdue_since_date" value="<?= e((string) ($task['overdue_since_date'] ?? '')) ?>" data-task-overdue-since-date>
+                                            <input type="hidden" value="<?= e((string) (($task['overdue_days'] ?? 0))) ?>" data-task-overdue-days>
+                                            <input type="hidden" value="<?= e((string) json_encode($task['history'] ?? [], JSON_UNESCAPED_UNICODE)) ?>" data-task-history-json>
 
                                             <div class="task-line-row">
                                                 <div class="task-line-title">
@@ -345,6 +350,15 @@
 
                                                 <div class="tag-field due-tag-field">
                                                     <span class="sr-only">Prazo</span>
+                                                    <?php if ($isOverdueMarked): ?>
+                                                        <button
+                                                            type="button"
+                                                            class="task-overdue-badge"
+                                                            data-task-overdue-badge
+                                                            title="Tarefa em atraso. Clique para remover o aviso."
+                                                            aria-label="Remover aviso de atraso"
+                                                        >Atraso</button>
+                                                    <?php endif; ?>
                                                     <button
                                                         type="button"
                                                         class="due-date-display<?= !empty($dueDateUi['is_relative']) ? ' is-relative' : '' ?>"
@@ -581,38 +595,47 @@
 
         <div class="task-detail-modal-body">
             <section class="task-detail-view" data-task-detail-view>
-                <div class="task-detail-view-block">
-                    <div class="task-detail-view-tags">
-                        <span class="task-detail-view-tag" data-task-detail-view-status></span>
-                        <span class="task-detail-view-tag" data-task-detail-view-priority></span>
-                        <span class="task-detail-view-tag" data-task-detail-view-group></span>
-                        <span class="task-detail-view-tag" data-task-detail-view-due></span>
+                <div class="task-detail-view-layout">
+                    <div class="task-detail-view-main">
+                        <div class="task-detail-view-block">
+                            <div class="task-detail-view-tags">
+                                <span class="task-detail-view-tag" data-task-detail-view-status></span>
+                                <span class="task-detail-view-tag" data-task-detail-view-priority></span>
+                                <span class="task-detail-view-tag" data-task-detail-view-group></span>
+                                <span class="task-detail-view-tag" data-task-detail-view-due></span>
+                            </div>
+                            <div class="task-detail-view-assignees" data-task-detail-view-assignees></div>
+                        </div>
+
+                        <div class="task-detail-view-block">
+                            <div class="task-detail-view-label">Descricao</div>
+                            <div class="task-detail-view-description" data-task-detail-view-description></div>
+                        </div>
+
+                        <div class="task-detail-view-block" data-task-detail-view-references hidden>
+                            <div class="task-detail-view-label">Referencias</div>
+
+                            <div class="task-detail-ref-section" data-task-detail-view-links-wrap hidden>
+                                <div class="task-detail-ref-title">Links</div>
+                                <div class="task-detail-ref-links" data-task-detail-view-links></div>
+                            </div>
+
+                            <div class="task-detail-ref-section" data-task-detail-view-images-wrap hidden>
+                                <div class="task-detail-ref-title">Imagens</div>
+                                <div class="task-detail-ref-images" data-task-detail-view-images></div>
+                            </div>
+                        </div>
+
+                        <div class="task-detail-view-meta">
+                            <span data-task-detail-view-created-by></span>
+                            <span data-task-detail-view-updated-at></span>
+                        </div>
                     </div>
-                    <div class="task-detail-view-assignees" data-task-detail-view-assignees></div>
-                </div>
 
-                <div class="task-detail-view-block">
-                    <div class="task-detail-view-label">Descricao</div>
-                    <div class="task-detail-view-description" data-task-detail-view-description></div>
-                </div>
-
-                <div class="task-detail-view-block" data-task-detail-view-references hidden>
-                    <div class="task-detail-view-label">Referencias</div>
-
-                    <div class="task-detail-ref-section" data-task-detail-view-links-wrap hidden>
-                        <div class="task-detail-ref-title">Links</div>
-                        <div class="task-detail-ref-links" data-task-detail-view-links></div>
-                    </div>
-
-                    <div class="task-detail-ref-section" data-task-detail-view-images-wrap hidden>
-                        <div class="task-detail-ref-title">Imagens</div>
-                        <div class="task-detail-ref-images" data-task-detail-view-images></div>
-                    </div>
-                </div>
-
-                <div class="task-detail-view-meta">
-                    <span data-task-detail-view-created-by></span>
-                    <span data-task-detail-view-updated-at></span>
+                    <aside class="task-detail-history-column">
+                        <div class="task-detail-view-label">Historico</div>
+                        <div class="task-detail-history-list" data-task-detail-view-history></div>
+                    </aside>
                 </div>
             </section>
 

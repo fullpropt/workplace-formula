@@ -850,6 +850,130 @@ window.addEventListener("DOMContentLoaded", () => {
     field.value = JSON.stringify(parseReferenceLines((urls || []).join("\n")));
   };
 
+  const readTaskHistoryField = (field) => {
+    if (!(field instanceof HTMLInputElement)) return [];
+    const raw = (field.value || "").trim();
+    if (!raw) return [];
+    try {
+      const decoded = JSON.parse(raw);
+      return Array.isArray(decoded) ? decoded : [];
+    } catch (_error) {
+      return [];
+    }
+  };
+
+  const writeTaskHistoryField = (field, history) => {
+    if (!(field instanceof HTMLInputElement)) return;
+    field.value = JSON.stringify(Array.isArray(history) ? history : []);
+  };
+
+  const formatHistoryDate = (value) => {
+    const raw = (value || "").trim();
+    if (!raw) return "Sem prazo";
+    const parsed = new Date(`${raw}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return parsed.toLocaleDateString("pt-BR");
+  };
+
+  const formatHistoryDateTime = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return parsed.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const taskHistoryMessage = (eventType, payload = {}) => {
+    switch (String(eventType || "").trim()) {
+      case "created":
+        return "Tarefa criada";
+      case "title_changed":
+        return "Titulo atualizado";
+      case "status_changed":
+        return `Status: ${payload.old_label || payload.old || "-"} -> ${
+          payload.new_label || payload.new || "-"
+        }`;
+      case "priority_changed":
+        return `Prioridade: ${payload.old_label || payload.old || "-"} -> ${
+          payload.new_label || payload.new || "-"
+        }`;
+      case "due_date_changed":
+        return `Prazo: ${formatHistoryDate(payload.old || "")} -> ${formatHistoryDate(
+          payload.new || ""
+        )}`;
+      case "group_changed":
+        return `Grupo: ${payload.old || "-"} -> ${payload.new || "-"}`;
+      case "assignees_changed":
+        return "Responsaveis atualizados";
+      case "overdue_started":
+        return `Atraso detectado (${Math.max(0, Number(payload.overdue_days) || 0)} dia(s))`;
+      case "overdue_cleared":
+        return "Sinalizacao de atraso removida";
+      default:
+        return "Atualizacao registrada";
+    }
+  };
+
+  const renderTaskDetailHistoryView = ({
+    history = [],
+    overdueFlag = 0,
+    overdueDays = 0,
+    overdueSinceDate = "",
+  } = {}) => {
+    if (!(taskDetailViewHistory instanceof HTMLElement)) return;
+
+    taskDetailViewHistory.innerHTML = "";
+    const items = [];
+
+    if (Number(overdueFlag) === 1) {
+      const overdueItem = document.createElement("div");
+      overdueItem.className = "task-detail-history-item is-alert";
+      const title = document.createElement("strong");
+      title.textContent = `Em atraso ha ${Math.max(0, Number(overdueDays) || 0)} dia(s)`;
+      const subtitle = document.createElement("span");
+      subtitle.textContent = overdueSinceDate
+        ? `Desde ${formatHistoryDate(overdueSinceDate)}`
+        : "Aguardando regularizacao";
+      overdueItem.append(title, subtitle);
+      items.push(overdueItem);
+    }
+
+    (Array.isArray(history) ? history : []).forEach((entry) => {
+      const card = document.createElement("div");
+      const eventType = String(entry?.event_type || "").trim();
+      card.className = `task-detail-history-item${eventType === "overdue_started" ? " is-alert" : ""}`;
+
+      const title = document.createElement("strong");
+      title.textContent = taskHistoryMessage(eventType, entry?.payload || {});
+
+      const subtitle = document.createElement("span");
+      const timeLabel = formatHistoryDateTime(entry?.created_at || "");
+      const actorName = String(entry?.actor_name || "").trim();
+      subtitle.textContent = actorName
+        ? `${timeLabel || "Registro"} · ${actorName}`
+        : timeLabel || "Registro automatico";
+
+      card.append(title, subtitle);
+      items.push(card);
+    });
+
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "task-detail-history-empty";
+      empty.textContent = "Sem historico registrado.";
+      taskDetailViewHistory.append(empty);
+      return;
+    }
+
+    items.forEach((item) => taskDetailViewHistory.append(item));
+  };
+
   const renderTaskDetailReferencesView = ({ links = [], images = [] } = {}) => {
     const safeLinks = parseReferenceLines((links || []).join("\n"));
     const safeImages = parseReferenceLines((images || []).join("\n"));
@@ -908,6 +1032,41 @@ window.addEventListener("DOMContentLoaded", () => {
     display.textContent = meta.display;
     display.setAttribute("aria-label", `Prazo: ${meta.title}`);
     display.classList.toggle("is-relative", meta.isRelative);
+  };
+
+  const createTaskOverdueBadge = () => {
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "task-overdue-badge";
+    badge.dataset.taskOverdueBadge = "";
+    badge.textContent = "Atraso";
+    badge.title = "Tarefa em atraso. Clique para remover o aviso.";
+    badge.setAttribute("aria-label", "Remover aviso de atraso");
+    return badge;
+  };
+
+  const syncTaskOverdueBadge = (form) => {
+    if (!(form instanceof HTMLFormElement)) return;
+    const flagField = form.querySelector("[data-task-overdue-flag]");
+    const dueTagField = form.querySelector(".due-tag-field");
+    const taskItem = form.closest("[data-task-item]");
+    if (!(flagField instanceof HTMLInputElement) || !(dueTagField instanceof HTMLElement)) {
+      return;
+    }
+
+    const isOverdueMarked = String(flagField.value || "0") === "1";
+    let badge = dueTagField.querySelector("[data-task-overdue-badge]");
+
+    if (isOverdueMarked && !(badge instanceof HTMLButtonElement)) {
+      badge = createTaskOverdueBadge();
+      dueTagField.prepend(badge);
+    } else if (!isOverdueMarked && badge instanceof HTMLElement) {
+      badge.remove();
+    }
+
+    if (taskItem instanceof HTMLElement) {
+      taskItem.classList.toggle("has-overdue-flag", isOverdueMarked);
+    }
   };
 
   document.querySelectorAll("[data-due-date-input]").forEach((input) => {
@@ -1185,6 +1344,53 @@ window.addEventListener("DOMContentLoaded", () => {
           imagesField.value = task.reference_images_json;
         }
       }
+      if (Object.prototype.hasOwnProperty.call(task, "due_date")) {
+        const dueDateField = form.querySelector("[data-due-date-input]");
+        if (dueDateField instanceof HTMLInputElement) {
+          dueDateField.value = task.due_date ? String(task.due_date) : "";
+          syncDueDateDisplay(dueDateField);
+        }
+      }
+      if (typeof task.status === "string") {
+        const statusField = form.querySelector('select[name="status"]');
+        if (statusField instanceof HTMLSelectElement) {
+          statusField.value = task.status;
+          syncSelectColor(statusField);
+        }
+      }
+      if (typeof task.priority === "string") {
+        const priorityField = form.querySelector('select[name="priority"]');
+        if (priorityField instanceof HTMLSelectElement) {
+          priorityField.value = task.priority;
+          syncSelectColor(priorityField);
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(task, "overdue_flag")) {
+        const overdueField = form.querySelector("[data-task-overdue-flag]");
+        if (overdueField instanceof HTMLInputElement) {
+          overdueField.value = Number(task.overdue_flag) === 1 ? "1" : "0";
+          syncTaskOverdueBadge(form);
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(task, "overdue_since_date")) {
+        const overdueSinceField = form.querySelector("[data-task-overdue-since-date]");
+        if (overdueSinceField instanceof HTMLInputElement) {
+          overdueSinceField.value = task.overdue_since_date ? String(task.overdue_since_date) : "";
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(task, "overdue_days")) {
+        const overdueDaysField = form.querySelector("[data-task-overdue-days]");
+        if (overdueDaysField instanceof HTMLInputElement) {
+          const nextValue = Math.max(0, Number.parseInt(task.overdue_days, 10) || 0);
+          overdueDaysField.value = String(nextValue);
+        }
+      }
+      if (Array.isArray(task.history)) {
+        const historyField = form.querySelector("[data-task-history-json]");
+        if (historyField instanceof HTMLInputElement) {
+          writeTaskHistoryField(historyField, task.history);
+        }
+      }
 
       if (taskItem instanceof HTMLElement && typeof task.group_name === "string") {
         moveTaskItemToGroupDom(taskItem, task.group_name);
@@ -1283,6 +1489,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.querySelectorAll("[data-task-autosave-form]").forEach((form) => {
+    syncTaskOverdueBadge(form);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       submitTaskAutosave(form);
@@ -1491,6 +1698,28 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     const dueDisplay = event.target.closest("[data-due-date-display]");
+    const overdueBadgeTrigger = event.target.closest("[data-task-overdue-badge]");
+    if (overdueBadgeTrigger) {
+      const form = overdueBadgeTrigger.closest("[data-task-autosave-form]");
+      const overdueField = form?.querySelector?.("[data-task-overdue-flag]");
+      const overdueSinceField = form?.querySelector?.("[data-task-overdue-since-date]");
+      const overdueDaysField = form?.querySelector?.("[data-task-overdue-days]");
+      if (form instanceof HTMLFormElement && overdueField instanceof HTMLInputElement) {
+        if (overdueField.value !== "0") {
+          overdueField.value = "0";
+          if (overdueSinceField instanceof HTMLInputElement) {
+            overdueSinceField.value = "";
+          }
+          if (overdueDaysField instanceof HTMLInputElement) {
+            overdueDaysField.value = "0";
+          }
+          syncTaskOverdueBadge(form);
+          scheduleTaskAutosave(form, 60);
+        }
+      }
+      return;
+    }
+
     if (dueDisplay) {
       const wrap = dueDisplay.closest(".due-tag-field");
       const input = wrap?.querySelector("[data-due-date-input]");
@@ -1602,6 +1831,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const taskDetailViewLinks = document.querySelector("[data-task-detail-view-links]");
   const taskDetailViewImagesWrap = document.querySelector("[data-task-detail-view-images-wrap]");
   const taskDetailViewImages = document.querySelector("[data-task-detail-view-images]");
+  const taskDetailViewHistory = document.querySelector("[data-task-detail-view-history]");
   const taskDetailViewCreatedBy = document.querySelector("[data-task-detail-view-created-by]");
   const taskDetailViewUpdatedAt = document.querySelector("[data-task-detail-view-updated-at]");
   const taskDetailEditTitle = document.querySelector("[data-task-detail-edit-title]");
@@ -1699,6 +1929,10 @@ window.addEventListener("DOMContentLoaded", () => {
     const descriptionField = form.querySelector('textarea[name="description"]');
     const referenceLinksField = form.querySelector('[data-task-reference-links-json]');
     const referenceImagesField = form.querySelector('[data-task-reference-images-json]');
+    const overdueFlagField = form.querySelector("[data-task-overdue-flag]");
+    const overdueSinceDateField = form.querySelector("[data-task-overdue-since-date]");
+    const overdueDaysField = form.querySelector("[data-task-overdue-days]");
+    const historyField = form.querySelector("[data-task-history-json]");
     const metaRow = form.querySelector(".task-line-meta");
 
     if (
@@ -1726,6 +1960,11 @@ window.addEventListener("DOMContentLoaded", () => {
       descriptionField,
       referenceLinksField: referenceLinksField instanceof HTMLInputElement ? referenceLinksField : null,
       referenceImagesField: referenceImagesField instanceof HTMLInputElement ? referenceImagesField : null,
+      overdueFlagField: overdueFlagField instanceof HTMLInputElement ? overdueFlagField : null,
+      overdueSinceDateField:
+        overdueSinceDateField instanceof HTMLInputElement ? overdueSinceDateField : null,
+      overdueDaysField: overdueDaysField instanceof HTMLInputElement ? overdueDaysField : null,
+      historyField: historyField instanceof HTMLInputElement ? historyField : null,
       metaRow,
     };
   };
@@ -1825,6 +2064,10 @@ window.addEventListener("DOMContentLoaded", () => {
       descriptionField,
       referenceLinksField,
       referenceImagesField,
+      overdueFlagField,
+      overdueSinceDateField,
+      overdueDaysField,
+      historyField,
       metaRow,
     } = context;
 
@@ -1838,6 +2081,15 @@ window.addEventListener("DOMContentLoaded", () => {
     const description = (descriptionField.value || "").trim();
     const referenceLinks = readJsonUrlListField(referenceLinksField);
     const referenceImages = readJsonUrlListField(referenceImagesField);
+    const overdueFlag =
+      overdueFlagField instanceof HTMLInputElement && overdueFlagField.value === "1" ? 1 : 0;
+    const overdueSinceDate =
+      overdueSinceDateField instanceof HTMLInputElement ? overdueSinceDateField.value || "" : "";
+    const overdueDays =
+      overdueDaysField instanceof HTMLInputElement
+        ? Math.max(0, Number.parseInt(overdueDaysField.value || "0", 10) || 0)
+        : 0;
+    const history = readTaskHistoryField(historyField);
     const metaSpans = metaRow ? Array.from(metaRow.querySelectorAll("span")) : [];
     const createdByText = metaSpans[0]?.textContent?.trim() || "";
     const updatedAtText = metaRow?.querySelector("[data-task-updated-at]")?.textContent?.trim() || "";
@@ -1861,6 +2113,12 @@ window.addEventListener("DOMContentLoaded", () => {
       taskDetailViewDescription.classList.toggle("is-empty", !description);
     }
     renderTaskDetailReferencesView({ links: referenceLinks, images: referenceImages });
+    renderTaskDetailHistoryView({
+      history,
+      overdueFlag,
+      overdueDays,
+      overdueSinceDate,
+    });
     if (taskDetailViewCreatedBy) taskDetailViewCreatedBy.textContent = createdByText;
     if (taskDetailViewUpdatedAt) {
       taskDetailViewUpdatedAt.textContent = updatedAtText;

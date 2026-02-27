@@ -2145,6 +2145,35 @@ textarea:focus {
     position: relative;
 }
 
+.task-overdue-badge {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    z-index: 3;
+    min-height: 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 114, 114, 0.42);
+    background: rgba(255, 86, 86, 0.15);
+    color: #ffd4d4;
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.task-overdue-badge:hover,
+.task-overdue-badge:focus-visible {
+    border-color: rgba(255, 138, 138, 0.62);
+    background: rgba(255, 96, 96, 0.22);
+    outline: none;
+}
+
+.task-list-item.has-overdue-flag {
+    border-color: rgba(255, 115, 115, 0.24);
+}
+
 .due-date-display {
     appearance: none;
     width: 100%;
@@ -2789,6 +2818,67 @@ textarea:focus {
     gap: 12px;
 }
 
+.task-detail-view-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 290px;
+    gap: 12px;
+    align-items: start;
+}
+
+.task-detail-view-main {
+    display: grid;
+    gap: 12px;
+}
+
+.task-detail-history-column {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    max-height: min(68vh, 620px);
+    overflow: auto;
+}
+
+.task-detail-history-list {
+    display: grid;
+    gap: 8px;
+}
+
+.task-detail-history-item {
+    display: grid;
+    gap: 4px;
+    padding: 8px 9px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.task-detail-history-item strong {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.3;
+}
+
+.task-detail-history-item span {
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1.3;
+}
+
+.task-detail-history-item.is-alert {
+    border-color: rgba(255, 116, 116, 0.24);
+    background: rgba(255, 84, 84, 0.08);
+}
+
+.task-detail-history-empty {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.58);
+    padding: 4px 2px;
+}
+
 .task-detail-view-block {
     display: grid;
     gap: 8px;
@@ -3334,6 +3424,14 @@ textarea:focus {
 
     .task-detail-inline-controls {
         grid-template-columns: 1fr;
+    }
+
+    .task-detail-view-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .task-detail-history-column {
+        max-height: 260px;
     }
 }
 

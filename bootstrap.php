@@ -152,6 +152,7 @@ function migrate(PDO $pdo): void
 
     ensureTaskExtendedSchema($pdo);
     ensureTaskGroupsSchema($pdo);
+    ensureTaskHistorySchema($pdo);
 }
 
 function migrateSqlite(PDO $pdo): void
@@ -174,6 +175,8 @@ function migrateSqlite(PDO $pdo): void
             status TEXT NOT NULL,
             priority TEXT NOT NULL,
             due_date TEXT DEFAULT NULL,
+            overdue_flag INTEGER NOT NULL DEFAULT 0,
+            overdue_since_date TEXT DEFAULT NULL,
             created_by INTEGER NOT NULL,
             assigned_to INTEGER DEFAULT NULL,
             group_name TEXT NOT NULL DEFAULT \'Geral\',
@@ -194,6 +197,19 @@ function migrateSqlite(PDO $pdo): void
             created_by INTEGER DEFAULT NULL,
             created_at TEXT NOT NULL,
             FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )'
+    );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS task_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            actor_user_id INTEGER DEFAULT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT \'{}\',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+            FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
         )'
     );
 
@@ -230,6 +246,8 @@ function migratePostgres(PDO $pdo): void
             status VARCHAR(32) NOT NULL,
             priority VARCHAR(32) NOT NULL,
             due_date DATE DEFAULT NULL,
+            overdue_flag SMALLINT NOT NULL DEFAULT 0,
+            overdue_since_date DATE DEFAULT NULL,
             created_by BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             assigned_to BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
             group_name TEXT NOT NULL DEFAULT \'Geral\',
@@ -246,6 +264,17 @@ function migratePostgres(PDO $pdo): void
             id BIGSERIAL PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
             created_by BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+        )'
+    );
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS task_history (
+            id BIGSERIAL PRIMARY KEY,
+            task_id BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+            actor_user_id BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT \'{}\',
             created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
         )'
     );
@@ -277,6 +306,16 @@ function ensureTaskExtendedSchema(PDO $pdo): void
     if (!tableHasColumn($pdo, 'tasks', 'reference_images_json')) {
         $pdo->exec("ALTER TABLE tasks ADD COLUMN reference_images_json TEXT NOT NULL DEFAULT '[]'");
     }
+    if (!tableHasColumn($pdo, 'tasks', 'overdue_flag')) {
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN overdue_flag INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!tableHasColumn($pdo, 'tasks', 'overdue_since_date')) {
+        if (dbDriverName($pdo) === 'pgsql') {
+            $pdo->exec("ALTER TABLE tasks ADD COLUMN overdue_since_date DATE DEFAULT NULL");
+        } else {
+            $pdo->exec("ALTER TABLE tasks ADD COLUMN overdue_since_date TEXT DEFAULT NULL");
+        }
+    }
 
     $stmt = $pdo->query('SELECT id, assigned_to, group_name, assignee_ids_json, reference_links_json, reference_images_json FROM tasks');
     $rows = $stmt ? $stmt->fetchAll() : [];
@@ -307,6 +346,44 @@ function ensureTaskExtendedSchema(PDO $pdo): void
             ':id' => (int) $row['id'],
         ]);
     }
+}
+
+function ensureTaskHistorySchema(PDO $pdo): void
+{
+    if (dbDriverName($pdo) === 'pgsql') {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS task_history (
+                id BIGSERIAL PRIMARY KEY,
+                task_id BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                actor_user_id BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL DEFAULT \'{}\',
+                created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+            )'
+        );
+        $pdo->exec(
+            'CREATE INDEX IF NOT EXISTS idx_task_history_task_created
+             ON task_history(task_id, created_at)'
+        );
+        return;
+    }
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS task_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            actor_user_id INTEGER DEFAULT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT \'{}\',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+            FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+        )'
+    );
+    $pdo->exec(
+        'CREATE INDEX IF NOT EXISTS idx_task_history_task_created
+         ON task_history(task_id, created_at)'
+    );
 }
 
 function ensureTaskGroupsSchema(PDO $pdo): void
@@ -755,6 +832,304 @@ function dueDateForStorage(?string $value): ?string
     return $date ? $date->format('Y-m-d') : null;
 }
 
+function taskOverdueDays(?string $overdueSinceDate): int
+{
+    $overdueSince = dueDateForStorage($overdueSinceDate);
+    if ($overdueSince === null) {
+        return 0;
+    }
+
+    $today = new DateTimeImmutable('today');
+    $since = DateTimeImmutable::createFromFormat('Y-m-d', $overdueSince);
+    if (!$since) {
+        return 0;
+    }
+
+    $days = (int) $since->diff($today)->format('%r%a');
+    return max(0, $days);
+}
+
+function normalizeTaskOverdueState(
+    string $status,
+    string $priority,
+    ?string $dueDate,
+    int $overdueFlag = 0,
+    ?string $overdueSinceDate = null
+): array {
+    $status = normalizeTaskStatus($status);
+    $priority = normalizeTaskPriority($priority);
+    $overdueFlag = $overdueFlag === 1 ? 1 : 0;
+    $overdueSinceDate = dueDateForStorage($overdueSinceDate);
+
+    if ($status === 'done' || $dueDate === null) {
+        return [
+            'status' => $status,
+            'priority' => $priority,
+            'due_date' => $dueDate,
+            'overdue_flag' => 0,
+            'overdue_since_date' => null,
+            'overdue_days' => 0,
+        ];
+    }
+
+    $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+
+    if ($dueDate < $today) {
+        $overdueSince = $overdueSinceDate ?? $dueDate;
+        return [
+            'status' => $status,
+            'priority' => 'urgent',
+            'due_date' => $today,
+            'overdue_flag' => 1,
+            'overdue_since_date' => $overdueSince,
+            'overdue_days' => taskOverdueDays($overdueSince),
+        ];
+    }
+
+    if ($dueDate > $today) {
+        return [
+            'status' => $status,
+            'priority' => $priority,
+            'due_date' => $dueDate,
+            'overdue_flag' => 0,
+            'overdue_since_date' => null,
+            'overdue_days' => 0,
+        ];
+    }
+
+    return [
+        'status' => $status,
+        'priority' => $priority,
+        'due_date' => $dueDate,
+        'overdue_flag' => $overdueFlag,
+        'overdue_since_date' => $overdueFlag === 1 ? ($overdueSinceDate ?? $dueDate) : null,
+        'overdue_days' => $overdueFlag === 1 ? taskOverdueDays($overdueSinceDate ?? $dueDate) : 0,
+    ];
+}
+
+function encodeTaskHistoryPayload(array $payload): string
+{
+    return json_encode($payload, JSON_UNESCAPED_UNICODE) ?: '{}';
+}
+
+function decodeTaskHistoryPayload($value): array
+{
+    $raw = is_string($value) ? trim($value) : '';
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function logTaskHistory(
+    PDO $pdo,
+    int $taskId,
+    string $eventType,
+    array $payload = [],
+    ?int $actorUserId = null,
+    ?string $createdAt = null
+): void {
+    if ($taskId <= 0 || trim($eventType) === '') {
+        return;
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO task_history (task_id, actor_user_id, event_type, payload_json, created_at)
+         VALUES (:task_id, :actor_user_id, :event_type, :payload_json, :created_at)'
+    );
+
+    $stmt->execute([
+        ':task_id' => $taskId,
+        ':actor_user_id' => $actorUserId,
+        ':event_type' => trim($eventType),
+        ':payload_json' => encodeTaskHistoryPayload($payload),
+        ':created_at' => $createdAt ?: nowIso(),
+    ]);
+}
+
+function taskHistoryList(int $taskId, int $limit = 80): array
+{
+    if ($taskId <= 0) {
+        return [];
+    }
+
+    $limit = max(1, min($limit, 300));
+    $sql = dbDriverName(db()) === 'pgsql'
+        ? 'SELECT
+               h.id,
+               h.task_id,
+               h.event_type,
+               h.payload_json,
+               h.created_at,
+               u.name AS actor_name
+           FROM task_history h
+           LEFT JOIN users u ON u.id = h.actor_user_id
+           WHERE h.task_id = :task_id
+           ORDER BY h.created_at DESC, h.id DESC
+           LIMIT ' . $limit
+        : 'SELECT
+               h.id,
+               h.task_id,
+               h.event_type,
+               h.payload_json,
+               h.created_at,
+               u.name AS actor_name
+           FROM task_history h
+           LEFT JOIN users u ON u.id = h.actor_user_id
+           WHERE h.task_id = :task_id
+           ORDER BY h.created_at DESC, h.id DESC
+           LIMIT ' . $limit;
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute([':task_id' => $taskId]);
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$row) {
+        $row['payload'] = decodeTaskHistoryPayload($row['payload_json'] ?? null);
+        unset($row['payload_json']);
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function taskHistoryByTaskIds(array $taskIds, int $limitPerTask = 80): array
+{
+    $ids = array_values(array_unique(array_map('intval', $taskIds)));
+    $ids = array_values(array_filter($ids, static fn (int $id) => $id > 0));
+    if (!$ids) {
+        return [];
+    }
+
+    $limitPerTask = max(1, min($limitPerTask, 300));
+    $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+    $sql = dbDriverName(db()) === 'pgsql'
+        ? 'SELECT
+               h.id,
+               h.task_id,
+               h.event_type,
+               h.payload_json,
+               h.created_at,
+               u.name AS actor_name
+           FROM task_history h
+           LEFT JOIN users u ON u.id = h.actor_user_id
+           WHERE h.task_id IN (' . $placeholders . ')
+           ORDER BY h.task_id ASC, h.created_at DESC, h.id DESC'
+        : 'SELECT
+               h.id,
+               h.task_id,
+               h.event_type,
+               h.payload_json,
+               h.created_at,
+               u.name AS actor_name
+           FROM task_history h
+           LEFT JOIN users u ON u.id = h.actor_user_id
+           WHERE h.task_id IN (' . $placeholders . ')
+           ORDER BY h.task_id ASC, h.created_at DESC, h.id DESC';
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($ids);
+    $rows = $stmt->fetchAll();
+
+    $grouped = [];
+    foreach ($rows as $row) {
+        $taskId = (int) ($row['task_id'] ?? 0);
+        if ($taskId <= 0) {
+            continue;
+        }
+        if (!isset($grouped[$taskId])) {
+            $grouped[$taskId] = [];
+        }
+        if (count($grouped[$taskId]) >= $limitPerTask) {
+            continue;
+        }
+        $row['payload'] = decodeTaskHistoryPayload($row['payload_json'] ?? null);
+        unset($row['payload_json']);
+        $grouped[$taskId][] = $row;
+    }
+
+    return $grouped;
+}
+
+function applyOverdueTaskPolicy(): int
+{
+    $pdo = db();
+    $today = (new DateTimeImmutable('today'))->format('Y-m-d');
+    $updatedAt = nowIso();
+
+    $select = $pdo->prepare(
+        'SELECT id, due_date, overdue_flag, overdue_since_date
+         FROM tasks
+         WHERE status <> :done
+           AND COALESCE(NULLIF(CAST(due_date AS TEXT), \'\'), \'\') <> \'\'
+           AND CAST(due_date AS TEXT) < :today'
+    );
+    $select->execute([
+        ':done' => 'done',
+        ':today' => $today,
+    ]);
+
+    $rows = $select->fetchAll();
+    if (!$rows) {
+        return 0;
+    }
+
+    $update = $pdo->prepare(
+        'UPDATE tasks
+         SET due_date = :today,
+             priority = :urgent,
+             overdue_flag = 1,
+             overdue_since_date = :overdue_since_date,
+             updated_at = :updated_at
+         WHERE id = :id'
+    );
+
+    $changed = 0;
+    foreach ($rows as $row) {
+        $taskId = (int) ($row['id'] ?? 0);
+        if ($taskId <= 0) {
+            continue;
+        }
+        $originalDueDate = dueDateForStorage((string) ($row['due_date'] ?? ''));
+        if ($originalDueDate === null) {
+            continue;
+        }
+
+        $previousOverdueFlag = ((int) ($row['overdue_flag'] ?? 0)) === 1 ? 1 : 0;
+        $overdueSinceDate = dueDateForStorage((string) ($row['overdue_since_date'] ?? '')) ?? $originalDueDate;
+
+        $update->execute([
+            ':today' => $today,
+            ':urgent' => 'urgent',
+            ':overdue_since_date' => $overdueSinceDate,
+            ':updated_at' => $updatedAt,
+            ':id' => $taskId,
+        ]);
+
+        $changed += $update->rowCount();
+
+        if ($previousOverdueFlag !== 1) {
+            logTaskHistory(
+                $pdo,
+                $taskId,
+                'overdue_started',
+                [
+                    'previous_due_date' => $originalDueDate,
+                    'new_due_date' => $today,
+                    'overdue_since_date' => $overdueSinceDate,
+                    'overdue_days' => taskOverdueDays($overdueSinceDate),
+                ],
+                null,
+                $updatedAt
+            );
+        }
+    }
+
+    return $changed;
+}
+
 function normalizeTaskGroupName(string $value): string
 {
     $value = trim($value);
@@ -1004,11 +1379,18 @@ function allTasks(): array
                 t.due_date ASC,
                 t.updated_at DESC';
 
-    $tasks = db()->query($sql)->fetchAll();
+    $pdo = db();
+    $tasks = $pdo->query($sql)->fetchAll();
     $usersById = usersMapById();
+    $historyByTaskId = taskHistoryByTaskIds(array_map(static fn ($task) => (int) ($task['id'] ?? 0), $tasks));
 
     foreach ($tasks as &$task) {
         $task['group_name'] = normalizeTaskGroupName((string) ($task['group_name'] ?? 'Geral'));
+        $task['overdue_flag'] = ((int) ($task['overdue_flag'] ?? 0)) === 1 ? 1 : 0;
+        $task['overdue_since_date'] = dueDateForStorage((string) ($task['overdue_since_date'] ?? ''));
+        $task['overdue_days'] = $task['overdue_flag'] === 1
+            ? taskOverdueDays($task['overdue_since_date'])
+            : 0;
         $assigneeIds = decodeAssigneeIds(
             $task['assignee_ids_json'] ?? null,
             isset($task['assigned_to']) ? (int) $task['assigned_to'] : null
@@ -1023,6 +1405,34 @@ function allTasks(): array
         foreach ($assigneeIds as $id) {
             if (isset($usersById[$id])) {
                 $task['assignees'][] = $usersById[$id];
+            }
+        }
+
+        $taskId = (int) ($task['id'] ?? 0);
+        $task['history'] = $taskId > 0 ? ($historyByTaskId[$taskId] ?? []) : [];
+        if ($taskId > 0) {
+            $hasCreatedEvent = false;
+            foreach ($task['history'] as $event) {
+                if ((string) ($event['event_type'] ?? '') === 'created') {
+                    $hasCreatedEvent = true;
+                    break;
+                }
+            }
+
+            if (!$hasCreatedEvent) {
+                $task['history'][] = [
+                    'id' => 0,
+                    'task_id' => $taskId,
+                    'event_type' => 'created',
+                    'payload' => [
+                        'title' => (string) ($task['title'] ?? ''),
+                        'status' => normalizeTaskStatus((string) ($task['status'] ?? 'todo')),
+                        'priority' => normalizeTaskPriority((string) ($task['priority'] ?? 'medium')),
+                        'due_date' => dueDateForStorage((string) ($task['due_date'] ?? '')),
+                    ],
+                    'created_at' => (string) ($task['created_at'] ?? ''),
+                    'actor_name' => (string) ($task['creator_name'] ?? ''),
+                ];
             }
         }
     }
