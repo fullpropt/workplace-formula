@@ -119,6 +119,7 @@ $flashes = getFlashes();
                         <circle cx="12" cy="12" r="3.2"></circle>
                     </svg>
                 </a>
+                <a href="index.php#tasks" class="btn btn-mini btn-ghost">Voltar</a>
                 <form method="post">
                     <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
                     <input type="hidden" name="action" value="logout">
