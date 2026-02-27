@@ -115,7 +115,12 @@
                     data-view="vault"
                     aria-pressed="false"
                 >
-                    <span class="sidebar-view-toggle-icon" aria-hidden="true">&#128274;</span>
+                    <span class="sidebar-view-toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                            <path d="M8 10V7a4 4 0 1 1 8 0v3"></path>
+                        </svg>
+                    </span>
                     <span class="sidebar-view-toggle-label">Cofre de acessos</span>
                 </button>
                 <a
@@ -596,110 +601,196 @@
             <div class="panel-header board-header vault-header">
                 <div>
                     <h2>Cofre de acessos</h2>
-                    <p>Guarde logins, senhas e anotacoes do workspace.</p>
                 </div>
                 <div class="board-summary">
                     <span><?= e((string) count($vaultEntries)) ?> item(ns)</span>
                 </div>
             </div>
 
-            <form method="post" class="vault-create-form">
-                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                <input type="hidden" name="action" value="create_vault_entry">
+            <div class="vault-toolbar">
+                <form method="post" class="vault-group-create-form">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                    <input type="hidden" name="action" value="create_vault_group">
+                    <input type="text" name="group_name" maxlength="60" placeholder="Novo grupo" required>
+                    <button type="submit" class="btn btn-mini">Criar grupo</button>
+                </form>
 
-                <label>
-                    <span>Nome</span>
-                    <input type="text" name="label" maxlength="120" placeholder="Ex.: Meta Ads" required>
-                </label>
+                <form method="post" class="vault-create-form">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                    <input type="hidden" name="action" value="create_vault_entry">
 
-                <label>
-                    <span>Login</span>
-                    <input type="text" name="login_value" maxlength="220" placeholder="usuario@email.com">
-                </label>
+                    <label>
+                        <span>Grupo</span>
+                        <select name="group_name" data-vault-create-group-select>
+                            <?php foreach ($vaultGroups as $vaultGroupOption): ?>
+                                <option value="<?= e((string) $vaultGroupOption) ?>"><?= e((string) $vaultGroupOption) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
 
-                <label>
-                    <span>Senha</span>
-                    <input type="text" name="password_value" maxlength="220" placeholder="Senha ou token">
-                </label>
+                    <label>
+                        <span>Nome</span>
+                        <input type="text" name="label" maxlength="120" placeholder="Ex.: Meta Ads" required data-vault-create-label-input>
+                    </label>
 
-                <label class="vault-create-notes">
-                    <span>Anotacoes</span>
-                    <textarea name="notes" rows="2" placeholder="Anotacoes adicionais..."></textarea>
-                </label>
+                    <label>
+                        <span>Login</span>
+                        <input type="text" name="login_value" maxlength="220" placeholder="usuario@email.com">
+                    </label>
 
-                <div class="vault-create-actions">
-                    <button type="submit" class="btn btn-mini">Salvar no cofre</button>
-                </div>
-            </form>
+                    <label>
+                        <span>Senha</span>
+                        <input type="text" name="password_value" maxlength="220" placeholder="Senha ou token">
+                    </label>
 
-            <div class="vault-list">
-                <?php if (!$vaultEntries): ?>
+                    <div class="vault-create-actions">
+                        <button type="submit" class="btn btn-mini">Adicionar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="vault-groups-list">
+                <?php if (empty($vaultEntriesByGroup)): ?>
                     <div class="empty-card">
                         <p>Nenhum item no cofre ainda.</p>
                     </div>
                 <?php else: ?>
-                    <?php foreach ($vaultEntries as $vaultEntry): ?>
-                        <?php
-                        $vaultEntryId = (int) ($vaultEntry['id'] ?? 0);
-                        $vaultUpdatedAtLabel = '';
-                        if (!empty($vaultEntry['updated_at'])) {
-                            $vaultUpdatedAtLabel = (new DateTimeImmutable((string) $vaultEntry['updated_at']))->format('d/m H:i');
-                        }
-                        ?>
-                        <article class="vault-item">
-                            <form method="post" class="vault-item-form">
-                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                                <input type="hidden" name="action" value="update_vault_entry">
-                                <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
-
-                                <div class="vault-item-grid">
-                                    <label>
-                                        <span>Nome</span>
-                                        <input type="text" name="label" maxlength="120" value="<?= e((string) ($vaultEntry['label'] ?? '')) ?>" required>
-                                    </label>
-
-                                    <label>
-                                        <span>Login</span>
-                                        <input type="text" name="login_value" maxlength="220" value="<?= e((string) ($vaultEntry['login_value'] ?? '')) ?>">
-                                    </label>
-
-                                    <label class="vault-password-wrap">
-                                        <span>Senha</span>
-                                        <div class="vault-password-field">
-                                            <input type="password" name="password_value" maxlength="220" value="<?= e((string) ($vaultEntry['password_value'] ?? '')) ?>" data-vault-password-input>
-                                            <button type="button" class="vault-password-toggle" data-vault-password-toggle aria-label="Mostrar senha">Ver</button>
-                                        </div>
-                                    </label>
+                    <?php foreach ($vaultEntriesByGroup as $vaultGroupName => $groupVaultEntries): ?>
+                        <?php $isProtectedVaultGroup = mb_strtolower((string) $vaultGroupName) === mb_strtolower((string) $protectedVaultGroupName); ?>
+                        <section class="task-group vault-group" data-vault-group data-group-name="<?= e((string) $vaultGroupName) ?>">
+                            <header class="task-group-head">
+                                <div class="task-group-head-main">
+                                    <form method="post" class="task-group-rename-form">
+                                        <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                        <input type="hidden" name="action" value="rename_vault_group">
+                                        <input type="hidden" name="old_group_name" value="<?= e((string) $vaultGroupName) ?>">
+                                        <h3>
+                                            <input
+                                                type="text"
+                                                name="new_group_name"
+                                                value="<?= e((string) $vaultGroupName) ?>"
+                                                maxlength="60"
+                                                class="task-group-name-input"
+                                                aria-label="Nome do grupo do cofre"
+                                                spellcheck="false"
+                                            >
+                                        </h3>
+                                        <button type="submit" class="sr-only">Salvar grupo</button>
+                                    </form>
                                 </div>
-
-                                <label>
-                                    <span>Anotacoes</span>
-                                    <textarea name="notes" rows="3"><?= e((string) ($vaultEntry['notes'] ?? '')) ?></textarea>
-                                </label>
-
-                                <div class="vault-item-footer">
-                                    <div class="vault-item-meta">
-                                        <?php if (!empty($vaultEntry['created_by_name'])): ?>
-                                            <span>Criado por <?= e((string) $vaultEntry['created_by_name']) ?></span>
-                                        <?php endif; ?>
-                                        <?php if ($vaultUpdatedAtLabel !== ''): ?>
-                                            <span>Atualizado em <?= e($vaultUpdatedAtLabel) ?></span>
-                                        <?php endif; ?>
-                                    </div>
-
-                                    <div class="vault-item-actions">
-                                        <button type="submit" class="btn btn-mini">Salvar</button>
-                                    </div>
+                                <div class="task-group-head-actions">
+                                    <button
+                                        type="button"
+                                        class="task-group-collapse"
+                                        data-vault-group-toggle
+                                        aria-expanded="true"
+                                        aria-label="Retrair grupo do cofre"
+                                    ><span aria-hidden="true">&#9662;</span></button>
+                                    <button
+                                        type="button"
+                                        class="group-add-button"
+                                        data-open-vault-create
+                                        data-create-group="<?= e((string) $vaultGroupName) ?>"
+                                        aria-label="Adicionar item no grupo <?= e((string) $vaultGroupName) ?>"
+                                    >+</button>
+                                    <?php if (!$isProtectedVaultGroup): ?>
+                                        <form method="post" class="task-group-delete-form">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                            <input type="hidden" name="action" value="delete_vault_group">
+                                            <input type="hidden" name="group_name" value="<?= e((string) $vaultGroupName) ?>">
+                                            <button
+                                                type="submit"
+                                                class="task-group-delete"
+                                                aria-label="Excluir grupo do cofre <?= e((string) $vaultGroupName) ?>"
+                                            ><span aria-hidden="true">&#10005;</span></button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <span class="task-group-count"><?= e((string) count($groupVaultEntries)) ?></span>
                                 </div>
-                            </form>
+                            </header>
 
-                            <form method="post" class="vault-item-delete-form">
-                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                                <input type="hidden" name="action" value="delete_vault_entry">
-                                <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
-                                <button type="submit" class="btn btn-mini btn-danger">Remover</button>
-                            </form>
-                        </article>
+                            <div class="vault-group-rows" data-vault-group-rows>
+                                <?php if (!$groupVaultEntries): ?>
+                                    <div class="task-group-empty-row">
+                                        <button
+                                            type="button"
+                                            class="task-group-empty-add"
+                                            data-open-vault-create
+                                            data-create-group="<?= e((string) $vaultGroupName) ?>"
+                                            aria-label="Adicionar item no grupo <?= e((string) $vaultGroupName) ?>"
+                                        >+</button>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php foreach ($groupVaultEntries as $vaultEntry): ?>
+                                    <?php
+                                    $vaultEntryId = (int) ($vaultEntry['id'] ?? 0);
+                                    $vaultUpdatedAtLabel = '';
+                                    if (!empty($vaultEntry['updated_at'])) {
+                                        $vaultUpdatedAtLabel = (new DateTimeImmutable((string) $vaultEntry['updated_at']))->format('d/m H:i');
+                                    }
+                                    ?>
+                                    <article class="vault-row">
+                                        <form method="post" class="vault-row-form">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                            <input type="hidden" name="action" value="update_vault_entry">
+                                            <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
+
+                                            <div class="vault-row-grid">
+                                                <label>
+                                                    <span>Nome</span>
+                                                    <input type="text" name="label" maxlength="120" value="<?= e((string) ($vaultEntry['label'] ?? '')) ?>" required>
+                                                </label>
+
+                                                <label>
+                                                    <span>Login</span>
+                                                    <input type="text" name="login_value" maxlength="220" value="<?= e((string) ($vaultEntry['login_value'] ?? '')) ?>">
+                                                </label>
+
+                                                <label class="vault-password-wrap">
+                                                    <span>Senha</span>
+                                                    <div class="vault-password-field">
+                                                        <input type="password" name="password_value" maxlength="220" value="<?= e((string) ($vaultEntry['password_value'] ?? '')) ?>" data-vault-password-input>
+                                                        <button type="button" class="vault-password-toggle" data-vault-password-toggle aria-label="Mostrar senha">Ver</button>
+                                                    </div>
+                                                </label>
+
+                                                <label>
+                                                    <span>Grupo</span>
+                                                    <select name="group_name">
+                                                        <?php foreach ($vaultGroups as $vaultGroupOption): ?>
+                                                            <option
+                                                                value="<?= e((string) $vaultGroupOption) ?>"
+                                                                <?= mb_strtolower((string) $vaultGroupOption) === mb_strtolower((string) ($vaultEntry['group_name'] ?? '')) ? ' selected' : '' ?>
+                                                            ><?= e((string) $vaultGroupOption) ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </label>
+                                            </div>
+
+                                            <div class="vault-row-footer">
+                                                <div class="vault-row-meta">
+                                                    <?php if (!empty($vaultEntry['created_by_name'])): ?>
+                                                        <span>Criado por <?= e((string) $vaultEntry['created_by_name']) ?></span>
+                                                    <?php endif; ?>
+                                                    <?php if ($vaultUpdatedAtLabel !== ''): ?>
+                                                        <span>Atualizado em <?= e($vaultUpdatedAtLabel) ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <button type="submit" class="btn btn-mini">Salvar</button>
+                                            </div>
+                                        </form>
+
+                                        <form method="post" class="vault-row-delete-form">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                            <input type="hidden" name="action" value="delete_vault_entry">
+                                            <input type="hidden" name="entry_id" value="<?= e((string) $vaultEntryId) ?>">
+                                            <button type="submit" class="btn btn-mini btn-danger">Remover</button>
+                                        </form>
+                                    </article>
+                                <?php endforeach; ?>
+                            </div>
+                        </section>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>

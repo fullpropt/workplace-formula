@@ -1581,6 +1581,25 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const setVaultGroupCollapsed = (groupSection, collapsed) => {
+    if (!(groupSection instanceof HTMLElement)) return;
+    const rows = groupSection.querySelector("[data-vault-group-rows]");
+    const toggleButton = groupSection.querySelector("[data-vault-group-toggle]");
+    const shouldCollapse = Boolean(collapsed);
+
+    groupSection.classList.toggle("is-collapsed", shouldCollapse);
+    if (rows instanceof HTMLElement) {
+      rows.hidden = shouldCollapse;
+    }
+    if (toggleButton instanceof HTMLButtonElement) {
+      toggleButton.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
+      toggleButton.setAttribute(
+        "aria-label",
+        shouldCollapse ? "Expandir grupo do cofre" : "Retrair grupo do cofre"
+      );
+    }
+  };
+
   const moveTaskItemToGroupDom = (taskItem, groupName) => {
     if (!(taskItem instanceof HTMLElement)) return false;
     const nextGroup = (groupName || "").trim() || "Geral";
@@ -3260,6 +3279,9 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-task-group]").forEach((section) => {
     setTaskGroupCollapsed(section, section.classList.contains("is-collapsed"));
   });
+  document.querySelectorAll("[data-vault-group]").forEach((section) => {
+    setVaultGroupCollapsed(section, section.classList.contains("is-collapsed"));
+  });
 
   const openCreateModal = (groupName) => {
     if (!createTaskModal) return;
@@ -3361,6 +3383,32 @@ window.addEventListener("DOMContentLoaded", () => {
           "aria-label",
           showPassword ? "Ocultar senha" : "Mostrar senha"
         );
+      }
+      return;
+    }
+
+    const openVaultCreateTrigger = target.closest("[data-open-vault-create]");
+    if (openVaultCreateTrigger instanceof HTMLElement) {
+      const groupName = (openVaultCreateTrigger.dataset.createGroup || "").trim();
+      const createGroupSelect = document.querySelector("[data-vault-create-group-select]");
+      const createLabelInput = document.querySelector("[data-vault-create-label-input]");
+      if (createGroupSelect instanceof HTMLSelectElement && groupName) {
+        if (Array.from(createGroupSelect.options).some((option) => option.value === groupName)) {
+          createGroupSelect.value = groupName;
+        }
+      }
+      if (createLabelInput instanceof HTMLInputElement) {
+        createLabelInput.focus();
+      }
+      return;
+    }
+
+    const vaultGroupToggleButton = target.closest("[data-vault-group-toggle]");
+    if (vaultGroupToggleButton instanceof HTMLElement) {
+      const groupSection = vaultGroupToggleButton.closest("[data-vault-group]");
+      if (groupSection instanceof HTMLElement) {
+        const isExpanded = vaultGroupToggleButton.getAttribute("aria-expanded") !== "false";
+        setVaultGroupCollapsed(groupSection, isExpanded);
       }
       return;
     }

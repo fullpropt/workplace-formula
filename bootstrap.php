@@ -679,10 +679,20 @@ function ensureWorkspaceVaultSchema(PDO $pdo): void
                 label TEXT NOT NULL,
                 login_value TEXT NOT NULL DEFAULT \'\',
                 password_value TEXT NOT NULL DEFAULT \'\',
+                group_name TEXT NOT NULL DEFAULT \'Geral\',
                 notes TEXT NOT NULL DEFAULT \'\',
                 created_by BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
                 created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
                 updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
+            )'
+        );
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS workspace_vault_groups (
+                id BIGSERIAL PRIMARY KEY,
+                workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                created_by BIGINT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+                created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL
             )'
         );
     } else {
@@ -693,6 +703,7 @@ function ensureWorkspaceVaultSchema(PDO $pdo): void
                 label TEXT NOT NULL,
                 login_value TEXT NOT NULL DEFAULT \'\',
                 password_value TEXT NOT NULL DEFAULT \'\',
+                group_name TEXT NOT NULL DEFAULT \'Geral\',
                 notes TEXT NOT NULL DEFAULT \'\',
                 created_by INTEGER DEFAULT NULL,
                 created_at TEXT NOT NULL,
@@ -701,6 +712,25 @@ function ensureWorkspaceVaultSchema(PDO $pdo): void
                 FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
             )'
         );
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS workspace_vault_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )'
+        );
+    }
+
+    if (!tableHasColumn($pdo, 'workspace_vault_entries', 'group_name')) {
+        if (dbDriverName($pdo) === 'pgsql') {
+            $pdo->exec("ALTER TABLE workspace_vault_entries ADD COLUMN group_name TEXT NOT NULL DEFAULT 'Geral'");
+        } else {
+            $pdo->exec("ALTER TABLE workspace_vault_entries ADD COLUMN group_name TEXT NOT NULL DEFAULT 'Geral'");
+        }
     }
 
     $pdo->exec(
@@ -711,6 +741,87 @@ function ensureWorkspaceVaultSchema(PDO $pdo): void
         'CREATE INDEX IF NOT EXISTS idx_workspace_vault_entries_workspace_updated
          ON workspace_vault_entries(workspace_id, updated_at)'
     );
+    $pdo->exec(
+        'CREATE INDEX IF NOT EXISTS idx_workspace_vault_entries_workspace_group
+         ON workspace_vault_entries(workspace_id, group_name)'
+    );
+
+    $pdo->exec(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_vault_groups_workspace_name_unique
+         ON workspace_vault_groups(workspace_id, name)'
+    );
+    $pdo->exec(
+        'CREATE INDEX IF NOT EXISTS idx_workspace_vault_groups_workspace
+         ON workspace_vault_groups(workspace_id)'
+    );
+
+    $rows = $pdo->query(
+        'SELECT id, group_name
+         FROM workspace_vault_entries'
+    )->fetchAll();
+    if ($rows) {
+        $normalizeStmt = $pdo->prepare(
+            'UPDATE workspace_vault_entries
+             SET group_name = :group_name
+             WHERE id = :id'
+        );
+        foreach ($rows as $row) {
+            $normalizeStmt->execute([
+                ':group_name' => normalizeVaultGroupName((string) ($row['group_name'] ?? 'Geral')),
+                ':id' => (int) ($row['id'] ?? 0),
+            ]);
+        }
+    }
+
+    $entryGroups = $pdo->query(
+        'SELECT workspace_id, group_name, MIN(created_by) AS created_by
+         FROM workspace_vault_entries
+         WHERE workspace_id IS NOT NULL
+         GROUP BY workspace_id, group_name'
+    )->fetchAll();
+    foreach ($entryGroups as $entryGroupRow) {
+        $workspaceId = (int) ($entryGroupRow['workspace_id'] ?? 0);
+        if ($workspaceId <= 0) {
+            continue;
+        }
+
+        upsertVaultGroup(
+            $pdo,
+            (string) ($entryGroupRow['group_name'] ?? 'Geral'),
+            isset($entryGroupRow['created_by']) ? (int) $entryGroupRow['created_by'] : null,
+            $workspaceId
+        );
+    }
+
+    $workspaceRows = $pdo->query(
+        'SELECT id, created_by
+         FROM workspaces
+         ORDER BY id ASC'
+    )->fetchAll();
+    foreach ($workspaceRows as $workspaceRow) {
+        $workspaceId = (int) ($workspaceRow['id'] ?? 0);
+        if ($workspaceId <= 0) {
+            continue;
+        }
+
+        $groupCountStmt = $pdo->prepare(
+            'SELECT COUNT(*)
+             FROM workspace_vault_groups
+             WHERE workspace_id = :workspace_id'
+        );
+        $groupCountStmt->execute([':workspace_id' => $workspaceId]);
+        $groupCount = (int) $groupCountStmt->fetchColumn();
+        if ($groupCount > 0) {
+            continue;
+        }
+
+        upsertVaultGroup(
+            $pdo,
+            'Geral',
+            isset($workspaceRow['created_by']) ? (int) $workspaceRow['created_by'] : null,
+            $workspaceId
+        );
+    }
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -1896,6 +2007,7 @@ function workspaceVaultEntriesList(?int $workspaceId = null): array
                 ve.label,
                 ve.login_value,
                 ve.password_value,
+                ve.group_name,
                 ve.notes,
                 ve.created_by,
                 ve.created_at,
@@ -1904,7 +2016,7 @@ function workspaceVaultEntriesList(?int $workspaceId = null): array
          FROM workspace_vault_entries ve
          LEFT JOIN users u ON u.id = ve.created_by
          WHERE ve.workspace_id = :workspace_id
-         ORDER BY ve.updated_at DESC, ve.id DESC'
+         ORDER BY ve.group_name ASC, ve.updated_at DESC, ve.id DESC'
     );
     $stmt->execute([':workspace_id' => $workspaceId]);
     $rows = $stmt->fetchAll();
@@ -1916,11 +2028,198 @@ function workspaceVaultEntriesList(?int $workspaceId = null): array
         $row['label'] = normalizeVaultEntryLabel((string) ($row['label'] ?? ''));
         $row['login_value'] = normalizeVaultFieldValue((string) ($row['login_value'] ?? ''), 220);
         $row['password_value'] = normalizeVaultFieldValue((string) ($row['password_value'] ?? ''), 220);
+        $row['group_name'] = normalizeVaultGroupName((string) ($row['group_name'] ?? 'Geral'));
         $row['notes'] = trim((string) ($row['notes'] ?? ''));
     }
     unset($row);
 
     return $rows;
+}
+
+function normalizeVaultGroupName(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return 'Geral';
+    }
+
+    $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+    if (mb_strlen($value) > 60) {
+        $value = mb_substr($value, 0, 60);
+    }
+
+    return uppercaseFirstCharacter($value);
+}
+
+function findVaultGroupByName(string $groupName, ?int $workspaceId = null): ?string
+{
+    $workspaceId = $workspaceId && $workspaceId > 0 ? $workspaceId : activeWorkspaceId();
+    if ($workspaceId === null) {
+        return null;
+    }
+
+    $needle = mb_strtolower(normalizeVaultGroupName($groupName));
+    foreach (vaultGroupsList($workspaceId) as $existingName) {
+        if (mb_strtolower($existingName) === $needle) {
+            return $existingName;
+        }
+    }
+
+    return null;
+}
+
+function defaultVaultGroupName(?int $workspaceId = null): string
+{
+    $pdo = db();
+    $workspaceId = $workspaceId && $workspaceId > 0 ? $workspaceId : activeWorkspaceId();
+    if ($workspaceId === null) {
+        return 'Geral';
+    }
+
+    $rowStmt = $pdo->prepare(
+        'SELECT name
+         FROM workspace_vault_groups
+         WHERE workspace_id = :workspace_id
+         ORDER BY id ASC
+         LIMIT 1'
+    );
+    $rowStmt->execute([':workspace_id' => $workspaceId]);
+    $row = $rowStmt->fetch();
+    $groupName = trim((string) ($row['name'] ?? ''));
+    if ($groupName !== '') {
+        return normalizeVaultGroupName($groupName);
+    }
+
+    $entryStmt = $pdo->prepare(
+        "SELECT group_name
+         FROM workspace_vault_entries
+         WHERE workspace_id = :workspace_id
+           AND group_name IS NOT NULL
+           AND group_name <> ''
+         ORDER BY id ASC
+         LIMIT 1"
+    );
+    $entryStmt->execute([':workspace_id' => $workspaceId]);
+    $entryRow = $entryStmt->fetch();
+    $entryGroupName = trim((string) ($entryRow['group_name'] ?? ''));
+    if ($entryGroupName !== '') {
+        $normalized = normalizeVaultGroupName($entryGroupName);
+        upsertVaultGroup($pdo, $normalized, null, $workspaceId);
+        return $normalized;
+    }
+
+    upsertVaultGroup($pdo, 'Geral', null, $workspaceId);
+    return 'Geral';
+}
+
+function isProtectedVaultGroupName(string $groupName, ?int $workspaceId = null): bool
+{
+    return mb_strtolower(normalizeVaultGroupName($groupName)) === mb_strtolower(defaultVaultGroupName($workspaceId));
+}
+
+function upsertVaultGroup(PDO $pdo, string $groupName, ?int $createdBy = null, ?int $workspaceId = null): string
+{
+    $workspaceId = $workspaceId && $workspaceId > 0 ? $workspaceId : activeWorkspaceId();
+    if ($workspaceId === null) {
+        throw new RuntimeException('Workspace ativo nao encontrado.');
+    }
+
+    $normalized = normalizeVaultGroupName($groupName);
+    $createdAt = nowIso();
+
+    if (dbDriverName($pdo) === 'pgsql') {
+        $stmt = $pdo->prepare(
+            'INSERT INTO workspace_vault_groups (workspace_id, name, created_by, created_at)
+             VALUES (:workspace_id, :name, :created_by, :created_at)
+             ON CONFLICT (workspace_id, name) DO NOTHING'
+        );
+    } else {
+        $stmt = $pdo->prepare(
+            'INSERT OR IGNORE INTO workspace_vault_groups (workspace_id, name, created_by, created_at)
+             VALUES (:workspace_id, :name, :created_by, :created_at)'
+        );
+    }
+
+    $stmt->bindValue(':workspace_id', $workspaceId, PDO::PARAM_INT);
+    $stmt->bindValue(':name', $normalized, PDO::PARAM_STR);
+    if ($createdBy !== null && $createdBy > 0) {
+        $stmt->bindValue(':created_by', $createdBy, PDO::PARAM_INT);
+    } else {
+        $stmt->bindValue(':created_by', null, PDO::PARAM_NULL);
+    }
+    $stmt->bindValue(':created_at', $createdAt, PDO::PARAM_STR);
+    $stmt->execute();
+
+    return $normalized;
+}
+
+function vaultGroupsList(?int $workspaceId = null): array
+{
+    $workspaceId = $workspaceId && $workspaceId > 0 ? $workspaceId : activeWorkspaceId();
+    if ($workspaceId === null) {
+        return ['Geral'];
+    }
+
+    $groups = [];
+
+    $storedSql = dbDriverName(db()) === 'pgsql'
+        ? 'SELECT name
+           FROM workspace_vault_groups
+           WHERE workspace_id = :workspace_id
+           ORDER BY LOWER(name) ASC'
+        : 'SELECT name
+           FROM workspace_vault_groups
+           WHERE workspace_id = :workspace_id
+           ORDER BY name COLLATE NOCASE ASC';
+
+    $storedStmt = db()->prepare($storedSql);
+    $storedStmt->execute([':workspace_id' => $workspaceId]);
+    foreach ($storedStmt->fetchAll() as $row) {
+        $groupName = normalizeVaultGroupName((string) ($row['name'] ?? ''));
+        $groups[$groupName] = $groupName;
+    }
+
+    $entryStmt = db()->prepare(
+        'SELECT DISTINCT group_name
+         FROM workspace_vault_entries
+         WHERE workspace_id = :workspace_id'
+    );
+    $entryStmt->execute([':workspace_id' => $workspaceId]);
+    foreach ($entryStmt->fetchAll() as $row) {
+        $groupName = normalizeVaultGroupName((string) ($row['group_name'] ?? ''));
+        $groups[$groupName] = $groupName;
+    }
+
+    if (!$groups) {
+        $default = defaultVaultGroupName($workspaceId);
+        return [$default];
+    }
+
+    $values = array_values($groups);
+    usort($values, static fn ($a, $b) => strcasecmp($a, $b));
+
+    return $values;
+}
+
+function vaultEntriesByGroup(array $entries, ?array $groupNames = null): array
+{
+    $groups = [];
+    if ($groupNames !== null) {
+        foreach ($groupNames as $groupName) {
+            $normalized = normalizeVaultGroupName((string) $groupName);
+            $groups[$normalized] = [];
+        }
+    }
+
+    foreach ($entries as $entry) {
+        $groupName = normalizeVaultGroupName((string) ($entry['group_name'] ?? 'Geral'));
+        if (!array_key_exists($groupName, $groups)) {
+            $groups[$groupName] = [];
+        }
+        $groups[$groupName][] = $entry;
+    }
+
+    return $groups;
 }
 
 function createWorkspaceVaultEntry(
@@ -1929,7 +2228,7 @@ function createWorkspaceVaultEntry(
     string $label,
     string $loginValue,
     string $passwordValue,
-    string $notes,
+    string $groupName = 'Geral',
     ?int $createdBy = null
 ): int {
     if ($workspaceId <= 0) {
@@ -1943,10 +2242,8 @@ function createWorkspaceVaultEntry(
 
     $loginValue = normalizeVaultFieldValue($loginValue, 220);
     $passwordValue = normalizeVaultFieldValue($passwordValue, 220);
-    $notes = trim($notes);
-    if (mb_strlen($notes) > 4000) {
-        $notes = mb_substr($notes, 0, 4000);
-    }
+    $groupName = normalizeVaultGroupName($groupName);
+    upsertVaultGroup($pdo, $groupName, $createdBy, $workspaceId);
 
     $createdAt = nowIso();
     $updatedAt = $createdAt;
@@ -1954,9 +2251,9 @@ function createWorkspaceVaultEntry(
     if (dbDriverName($pdo) === 'pgsql') {
         $stmt = $pdo->prepare(
             'INSERT INTO workspace_vault_entries (
-                workspace_id, label, login_value, password_value, notes, created_by, created_at, updated_at
+                workspace_id, label, login_value, password_value, group_name, notes, created_by, created_at, updated_at
             ) VALUES (
-                :workspace_id, :label, :login_value, :password_value, :notes, :created_by, :created_at, :updated_at
+                :workspace_id, :label, :login_value, :password_value, :group_name, :notes, :created_by, :created_at, :updated_at
             )
             RETURNING id'
         );
@@ -1964,7 +2261,8 @@ function createWorkspaceVaultEntry(
         $stmt->bindValue(':label', $label, PDO::PARAM_STR);
         $stmt->bindValue(':login_value', $loginValue, PDO::PARAM_STR);
         $stmt->bindValue(':password_value', $passwordValue, PDO::PARAM_STR);
-        $stmt->bindValue(':notes', $notes, PDO::PARAM_STR);
+        $stmt->bindValue(':group_name', $groupName, PDO::PARAM_STR);
+        $stmt->bindValue(':notes', '', PDO::PARAM_STR);
         if ($createdBy !== null && $createdBy > 0) {
             $stmt->bindValue(':created_by', $createdBy, PDO::PARAM_INT);
         } else {
@@ -1979,16 +2277,17 @@ function createWorkspaceVaultEntry(
 
     $stmt = $pdo->prepare(
         'INSERT INTO workspace_vault_entries (
-            workspace_id, label, login_value, password_value, notes, created_by, created_at, updated_at
+            workspace_id, label, login_value, password_value, group_name, notes, created_by, created_at, updated_at
         ) VALUES (
-            :workspace_id, :label, :login_value, :password_value, :notes, :created_by, :created_at, :updated_at
+            :workspace_id, :label, :login_value, :password_value, :group_name, :notes, :created_by, :created_at, :updated_at
         )'
     );
     $stmt->bindValue(':workspace_id', $workspaceId, PDO::PARAM_INT);
     $stmt->bindValue(':label', $label, PDO::PARAM_STR);
     $stmt->bindValue(':login_value', $loginValue, PDO::PARAM_STR);
     $stmt->bindValue(':password_value', $passwordValue, PDO::PARAM_STR);
-    $stmt->bindValue(':notes', $notes, PDO::PARAM_STR);
+    $stmt->bindValue(':group_name', $groupName, PDO::PARAM_STR);
+    $stmt->bindValue(':notes', '', PDO::PARAM_STR);
     if ($createdBy !== null && $createdBy > 0) {
         $stmt->bindValue(':created_by', $createdBy, PDO::PARAM_INT);
     } else {
@@ -2008,7 +2307,7 @@ function updateWorkspaceVaultEntry(
     string $label,
     string $loginValue,
     string $passwordValue,
-    string $notes
+    string $groupName = 'Geral'
 ): void {
     if ($workspaceId <= 0 || $entryId <= 0) {
         throw new RuntimeException('Registro invalido.');
@@ -2021,16 +2320,15 @@ function updateWorkspaceVaultEntry(
 
     $loginValue = normalizeVaultFieldValue($loginValue, 220);
     $passwordValue = normalizeVaultFieldValue($passwordValue, 220);
-    $notes = trim($notes);
-    if (mb_strlen($notes) > 4000) {
-        $notes = mb_substr($notes, 0, 4000);
-    }
+    $groupName = normalizeVaultGroupName($groupName);
+    upsertVaultGroup($pdo, $groupName, null, $workspaceId);
 
     $stmt = $pdo->prepare(
         'UPDATE workspace_vault_entries
          SET label = :label,
              login_value = :login_value,
              password_value = :password_value,
+             group_name = :group_name,
              notes = :notes,
              updated_at = :updated_at
          WHERE id = :id
@@ -2040,7 +2338,8 @@ function updateWorkspaceVaultEntry(
         ':label' => $label,
         ':login_value' => $loginValue,
         ':password_value' => $passwordValue,
-        ':notes' => $notes,
+        ':group_name' => $groupName,
+        ':notes' => '',
         ':updated_at' => nowIso(),
         ':id' => $entryId,
         ':workspace_id' => $workspaceId,

@@ -165,6 +165,143 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('success', 'Usuario adicionado ao workspace.');
                 redirectTo('index.php#tasks');
 
+            case 'create_vault_group':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                $groupName = normalizeVaultGroupName((string) ($_POST['group_name'] ?? ''));
+                if (findVaultGroupByName($groupName, $workspaceId) !== null) {
+                    throw new RuntimeException('Este grupo de cofre ja existe.');
+                }
+
+                upsertVaultGroup($pdo, $groupName, (int) $authUser['id'], $workspaceId);
+                flash('success', 'Grupo do cofre criado.');
+                redirectTo('index.php#vault');
+
+            case 'rename_vault_group':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                $oldGroupInput = normalizeVaultGroupName((string) ($_POST['old_group_name'] ?? ''));
+                $newGroupName = normalizeVaultGroupName((string) ($_POST['new_group_name'] ?? ''));
+                $existingOldGroupName = findVaultGroupByName($oldGroupInput, $workspaceId);
+                if ($existingOldGroupName === null) {
+                    throw new RuntimeException('Grupo do cofre nao encontrado.');
+                }
+
+                $existingTargetGroupName = findVaultGroupByName($newGroupName, $workspaceId);
+                if (
+                    $existingTargetGroupName !== null &&
+                    mb_strtolower($existingTargetGroupName) !== mb_strtolower($existingOldGroupName)
+                ) {
+                    throw new RuntimeException('Ja existe um grupo do cofre com este nome.');
+                }
+
+                if (mb_strtolower($existingOldGroupName) !== mb_strtolower($newGroupName)) {
+                    $pdo->beginTransaction();
+                    try {
+                        $renameGroupStmt = $pdo->prepare(
+                            'UPDATE workspace_vault_groups
+                             SET name = :new_group_name
+                             WHERE workspace_id = :workspace_id
+                               AND name = :old_group_name'
+                        );
+                        $renameGroupStmt->execute([
+                            ':new_group_name' => $newGroupName,
+                            ':workspace_id' => $workspaceId,
+                            ':old_group_name' => $existingOldGroupName,
+                        ]);
+
+                        $renameEntriesStmt = $pdo->prepare(
+                            'UPDATE workspace_vault_entries
+                             SET group_name = :new_group_name,
+                                 updated_at = :updated_at
+                             WHERE workspace_id = :workspace_id
+                               AND group_name = :old_group_name'
+                        );
+                        $renameEntriesStmt->execute([
+                            ':new_group_name' => $newGroupName,
+                            ':updated_at' => nowIso(),
+                            ':workspace_id' => $workspaceId,
+                            ':old_group_name' => $existingOldGroupName,
+                        ]);
+
+                        $pdo->commit();
+                    } catch (Throwable $e) {
+                        if ($pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                        throw $e;
+                    }
+                }
+
+                flash('success', 'Grupo do cofre renomeado.');
+                redirectTo('index.php#vault');
+
+            case 'delete_vault_group':
+                $authUser = requireAuth();
+                $workspaceId = activeWorkspaceId($authUser);
+                if ($workspaceId === null) {
+                    throw new RuntimeException('Workspace ativo nao encontrado.');
+                }
+
+                $groupName = normalizeVaultGroupName((string) ($_POST['group_name'] ?? ''));
+                $existingGroupName = findVaultGroupByName($groupName, $workspaceId);
+                if ($existingGroupName === null) {
+                    throw new RuntimeException('Grupo do cofre nao encontrado.');
+                }
+                if (isProtectedVaultGroupName($existingGroupName, $workspaceId)) {
+                    throw new RuntimeException('Este grupo do cofre nao pode ser removido.');
+                }
+
+                $pdo->beginTransaction();
+                try {
+                    $deleteEntriesStmt = $pdo->prepare(
+                        'DELETE FROM workspace_vault_entries
+                         WHERE workspace_id = :workspace_id
+                           AND group_name = :group_name'
+                    );
+                    $deleteEntriesStmt->execute([
+                        ':workspace_id' => $workspaceId,
+                        ':group_name' => $existingGroupName,
+                    ]);
+                    $deletedEntriesCount = (int) $deleteEntriesStmt->rowCount();
+
+                    $deleteGroupStmt = $pdo->prepare(
+                        'DELETE FROM workspace_vault_groups
+                         WHERE workspace_id = :workspace_id
+                           AND name = :group_name'
+                    );
+                    $deleteGroupStmt->execute([
+                        ':workspace_id' => $workspaceId,
+                        ':group_name' => $existingGroupName,
+                    ]);
+                    if ($deleteGroupStmt->rowCount() <= 0) {
+                        throw new RuntimeException('Nao foi possivel remover o grupo do cofre.');
+                    }
+
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
+
+                flash(
+                    'success',
+                    $deletedEntriesCount > 0
+                        ? sprintf('Grupo do cofre removido. %d item(ns) excluido(s).', $deletedEntriesCount)
+                        : 'Grupo do cofre removido.'
+                );
+                redirectTo('index.php#vault');
+
             case 'create_vault_entry':
                 $authUser = requireAuth();
                 $workspaceId = activeWorkspaceId($authUser);
@@ -172,13 +309,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Workspace ativo nao encontrado.');
                 }
 
+                $groupNameInput = normalizeVaultGroupName((string) ($_POST['group_name'] ?? ''));
+                $groupName = findVaultGroupByName($groupNameInput, $workspaceId) ?? $groupNameInput;
                 createWorkspaceVaultEntry(
                     $pdo,
                     $workspaceId,
                     (string) ($_POST['label'] ?? ''),
                     (string) ($_POST['login_value'] ?? ''),
                     (string) ($_POST['password_value'] ?? ''),
-                    (string) ($_POST['notes'] ?? ''),
+                    $groupName,
                     (int) $authUser['id']
                 );
 
@@ -193,6 +332,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $entryId = (int) ($_POST['entry_id'] ?? 0);
+                $groupNameInput = normalizeVaultGroupName((string) ($_POST['group_name'] ?? ''));
+                $groupName = findVaultGroupByName($groupNameInput, $workspaceId) ?? $groupNameInput;
                 updateWorkspaceVaultEntry(
                     $pdo,
                     $workspaceId,
@@ -200,7 +341,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (string) ($_POST['label'] ?? ''),
                     (string) ($_POST['login_value'] ?? ''),
                     (string) ($_POST['password_value'] ?? ''),
-                    (string) ($_POST['notes'] ?? '')
+                    $groupName
                 );
 
                 flash('success', 'Item do cofre atualizado.');
@@ -951,6 +1092,24 @@ $priorityOptions = taskPriorities();
 $users = ($currentUser && $currentWorkspaceId !== null) ? usersList($currentWorkspaceId) : [];
 $workspaceMembers = ($currentUser && $currentWorkspaceId !== null) ? workspaceMembersList($currentWorkspaceId) : [];
 $vaultEntries = ($currentUser && $currentWorkspaceId !== null) ? workspaceVaultEntriesList($currentWorkspaceId) : [];
+$vaultGroups = ($currentUser && $currentWorkspaceId !== null) ? vaultGroupsList($currentWorkspaceId) : ['Geral'];
+$protectedVaultGroupName = ($currentUser && $currentWorkspaceId !== null) ? defaultVaultGroupName($currentWorkspaceId) : 'Geral';
+if ($currentUser && $vaultGroups) {
+    $protectedVaultIndex = null;
+    foreach ($vaultGroups as $index => $groupName) {
+        if (mb_strtolower((string) $groupName) === mb_strtolower($protectedVaultGroupName)) {
+            $protectedVaultIndex = $index;
+            break;
+        }
+    }
+    if ($protectedVaultIndex !== null && $protectedVaultIndex !== 0) {
+        $protectedVault = $vaultGroups[$protectedVaultIndex];
+        unset($vaultGroups[$protectedVaultIndex]);
+        array_unshift($vaultGroups, $protectedVault);
+        $vaultGroups = array_values($vaultGroups);
+    }
+}
+$vaultEntriesByGroup = $currentUser ? vaultEntriesByGroup($vaultEntries, $vaultGroups) : [];
 $statusFilter = isset($_GET['status']) && trim((string) $_GET['status']) !== ''
     ? normalizeTaskStatus((string) $_GET['status'])
     : null;
@@ -997,8 +1156,8 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=38">
-    <script src="assets/app.js?v=14" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=39">
+    <script src="assets/app.js?v=15" defer></script>
 </head>
 <body
     class="<?= $currentUser ? 'is-dashboard' : 'is-auth' ?>"

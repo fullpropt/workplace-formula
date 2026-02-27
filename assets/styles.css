@@ -1238,7 +1238,7 @@ textarea:focus {
 
 .is-dashboard .sidebar-footer {
     padding-top: 4px;
-    padding-bottom: 14px;
+    padding-bottom: 8px;
 }
 
 .sidebar-view-toggle {
@@ -1256,6 +1256,7 @@ textarea:focus {
     font-size: 0.78rem;
     font-weight: 600;
     letter-spacing: 0.01em;
+    margin-bottom: 4px;
     cursor: pointer;
     transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
@@ -1274,8 +1275,21 @@ textarea:focus {
 }
 
 .sidebar-view-toggle-icon {
-    font-size: 0.9rem;
-    line-height: 1;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-view-toggle-icon svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .sidebar-view-toggle-label {
@@ -1977,40 +1991,23 @@ textarea:focus {
     font-size: 0.78rem;
 }
 
-.vault-create-form {
+.vault-toolbar {
     display: grid;
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
     gap: 8px;
     margin-bottom: 10px;
+}
+
+.vault-group-create-form {
+    display: grid;
+    grid-template-columns: minmax(220px, 340px) auto;
+    gap: 8px;
     padding: 8px;
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.02);
 }
 
-.vault-create-form label,
-.vault-item-form label {
-    display: grid;
-    gap: 5px;
-}
-
-.vault-create-form label > span,
-.vault-item-form label > span {
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.58);
-}
-
-.vault-create-notes,
-.vault-item-form > label {
-    grid-column: 1 / -1;
-}
-
-.vault-create-form input,
-.vault-create-form textarea,
-.vault-item-form input,
-.vault-item-form textarea {
+.vault-group-create-form input {
     min-height: 34px;
     border-radius: 11px;
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -2020,19 +2017,50 @@ textarea:focus {
     font-size: 0.84rem;
 }
 
-.vault-create-form textarea,
-.vault-item-form textarea {
-    min-height: 74px;
-    resize: vertical;
+.vault-create-form {
+    display: grid;
+    grid-template-columns: minmax(140px, 190px) minmax(150px, 1fr) minmax(160px, 1fr) minmax(160px, 1fr) auto;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    align-items: end;
+}
+
+.vault-create-form label,
+.vault-row-form label {
+    display: grid;
+    gap: 5px;
+}
+
+.vault-create-form label > span,
+.vault-row-form label > span {
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.vault-create-form input,
+.vault-create-form select,
+.vault-row-form input,
+.vault-row-form select {
+    min-height: 34px;
+    border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(6, 10, 22, 0.86);
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 0.84rem;
 }
 
 .vault-create-actions {
-    grid-column: 1 / -1;
     display: flex;
     justify-content: flex-end;
 }
 
-.vault-list {
+.vault-groups-list {
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -2041,27 +2069,37 @@ textarea:focus {
     padding-right: 2px;
 }
 
-.vault-item {
+.vault-group.is-collapsed .vault-group-rows {
+    display: none;
+}
+
+.vault-group-rows {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+}
+
+.vault-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
     align-items: start;
-    padding: 10px;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    background: rgba(255, 255, 255, 0.015);
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 8, 18, 0.52);
 }
 
-.vault-item-form {
+.vault-row-form {
     margin: 0;
     display: grid;
     gap: 8px;
     min-width: 0;
 }
 
-.vault-item-grid {
+.vault-row-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) minmax(170px, 1fr) minmax(140px, 190px);
     gap: 8px;
 }
 
@@ -2093,7 +2131,7 @@ textarea:focus {
     background: rgba(58, 148, 255, 0.14);
 }
 
-.vault-item-footer {
+.vault-row-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2101,7 +2139,7 @@ textarea:focus {
     flex-wrap: wrap;
 }
 
-.vault-item-meta {
+.vault-row-meta {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
@@ -2109,12 +2147,7 @@ textarea:focus {
     font-size: 0.73rem;
 }
 
-.vault-item-actions {
-    display: flex;
-    justify-content: flex-end;
-}
-
-.vault-item-delete-form {
+.vault-row-delete-form {
     margin: 0;
 }
 
@@ -4253,8 +4286,12 @@ textarea:focus {
     }
 
     .vault-create-form,
-    .vault-item-grid {
+    .vault-row-grid {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .vault-group-create-form {
+        grid-template-columns: 1fr auto;
     }
 }
 
@@ -4347,12 +4384,13 @@ textarea:focus {
         width: 100%;
     }
 
+    .vault-group-create-form,
     .vault-create-form,
-    .vault-item-grid {
+    .vault-row-grid {
         grid-template-columns: 1fr;
     }
 
-    .vault-item {
+    .vault-row {
         grid-template-columns: 1fr;
     }
 }
