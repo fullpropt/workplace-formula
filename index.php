@@ -899,10 +899,6 @@ $currentUser = currentUser();
 $currentWorkspaceId = $currentUser ? activeWorkspaceId($currentUser) : null;
 $currentWorkspace = ($currentUser && $currentWorkspaceId !== null) ? activeWorkspace($currentUser) : null;
 $userWorkspaces = $currentUser ? workspacesForUser((int) $currentUser['id']) : [];
-$canManageWorkspace = ($currentUser && $currentWorkspaceId !== null)
-    ? userCanManageWorkspace((int) $currentUser['id'], $currentWorkspaceId)
-    : false;
-$workspaceRole = normalizeWorkspaceRole((string) ($currentWorkspace['member_role'] ?? 'member'));
 $flashes = getFlashes();
 $statusOptions = taskStatuses();
 $priorityOptions = taskPriorities();
@@ -954,7 +950,7 @@ $completionRate = $stats['total'] > 0 ? (int) round(($stats['done'] / $stats['to
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/styles.css?v=30">
+    <link rel="stylesheet" href="assets/styles.css?v=33">
     <script src="assets/app.js?v=13" defer></script>
 </head>
 <body

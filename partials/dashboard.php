@@ -3,34 +3,6 @@
         <img src="assets/WorkForm - Logo (Negativa).svg?v=1" alt="WorkForm" class="brand-lockup" width="116" height="29">
     </a>
 
-    <div class="workspace-top-controls">
-        <form method="post" class="workspace-switch-form">
-            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-            <input type="hidden" name="action" value="switch_workspace">
-            <label>
-                <span class="sr-only">Workspace ativo</span>
-                <select name="workspace_id" onchange="this.form.submit()">
-                    <?php foreach ($userWorkspaces as $workspaceOption): ?>
-                        <?php $workspaceOptionId = (int) ($workspaceOption['id'] ?? 0); ?>
-                        <option value="<?= e((string) $workspaceOptionId) ?>"<?= $currentWorkspaceId === $workspaceOptionId ? ' selected' : '' ?>>
-                            <?= e((string) ($workspaceOption['name'] ?? 'Workspace')) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
-        </form>
-
-        <form method="post" class="workspace-create-form">
-            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-            <input type="hidden" name="action" value="create_workspace">
-            <label>
-                <span class="sr-only">Novo workspace</span>
-                <input type="text" name="workspace_name" maxlength="80" placeholder="Novo workspace" required>
-            </label>
-            <button type="submit" class="btn btn-mini btn-ghost">Criar</button>
-        </form>
-    </div>
-
     <div class="user-chip">
         <div class="avatar" aria-hidden="true"><?= e(strtoupper(substr((string) $currentUser['name'], 0, 1))) ?></div>
         <div>
@@ -39,9 +11,6 @@
         </div>
     </div>
     <div class="top-nav-actions">
-        <span class="workspace-role-badge workspace-role-<?= e((string) $workspaceRole) ?>">
-            <?= e((string) (workspaceRoles()[$workspaceRole] ?? 'Usuario')) ?>
-        </span>
         <form method="post">
             <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
             <input type="hidden" name="action" value="logout">
@@ -77,21 +46,45 @@
     <section class="workspace-layout tasklist-layout">
         <aside class="panel users-sidebar" id="team">
             <div class="users-sidebar-body">
-                <div class="panel-header">
-                    <h2><?= e((string) ($currentWorkspace['name'] ?? 'Workspace')) ?></h2>
+                <div class="panel-header workspace-sidebar-header">
+                    <details class="workspace-sidebar-picker">
+                        <summary aria-label="Trocar workspace">
+                            <span class="workspace-sidebar-picker-title"><?= e((string) ($currentWorkspace['name'] ?? 'Workspace')) ?></span>
+                            <span class="workspace-sidebar-picker-caret" aria-hidden="true">&#9662;</span>
+                        </summary>
+                        <div class="workspace-sidebar-picker-menu">
+                            <div class="workspace-sidebar-picker-list">
+                                <?php foreach ($userWorkspaces as $workspaceOption): ?>
+                                    <?php
+                                    $workspaceOptionId = (int) ($workspaceOption['id'] ?? 0);
+                                    $workspaceOptionName = (string) ($workspaceOption['name'] ?? 'Workspace');
+                                    $isCurrentWorkspace = $currentWorkspaceId === $workspaceOptionId;
+                                    ?>
+                                    <?php if ($isCurrentWorkspace): ?>
+                                        <span class="workspace-sidebar-picker-current"><?= e($workspaceOptionName) ?></span>
+                                    <?php else: ?>
+                                        <form method="post" class="workspace-sidebar-picker-form">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                            <input type="hidden" name="action" value="switch_workspace">
+                                            <input type="hidden" name="workspace_id" value="<?= e((string) $workspaceOptionId) ?>">
+                                            <button type="submit" class="workspace-sidebar-picker-option"><?= e($workspaceOptionName) ?></button>
+                                        </form>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                            <form method="post" class="workspace-sidebar-create-form">
+                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                <input type="hidden" name="action" value="create_workspace">
+                                <label>
+                                    <span class="sr-only">Novo workspace</span>
+                                    <input type="text" name="workspace_name" maxlength="80" placeholder="Novo workspace" required>
+                                </label>
+                                <button type="submit" class="btn btn-mini btn-ghost">Criar</button>
+                            </form>
+                        </div>
+                    </details>
                     <p>Equipe do workspace</p>
                 </div>
-                <?php if ($canManageWorkspace): ?>
-                    <form method="post" class="workspace-member-form">
-                        <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                        <input type="hidden" name="action" value="add_workspace_member">
-                        <label>
-                            <span class="sr-only">Adicionar usuario por e-mail</span>
-                            <input type="email" name="member_email" placeholder="Adicionar usuario por e-mail" required>
-                        </label>
-                        <button type="submit" class="btn btn-mini btn-ghost">Adicionar</button>
-                    </form>
-                <?php endif; ?>
                 <ul class="team-list">
                     <?php if (!$workspaceMembers): ?>
                         <li>Nenhum usuario cadastrado.</li>
@@ -105,14 +98,26 @@
                                 <div class="avatar small" aria-hidden="true"><?= e(strtoupper(substr((string) $workspaceMember['name'], 0, 1))) ?></div>
                                 <div class="team-user-meta">
                                     <strong><?= e((string) $workspaceMember['name']) ?></strong>
+                                    <span class="workspace-member-role workspace-role-<?= e((string) $memberRole) ?>"><?= e((string) $memberRoleLabel) ?></span>
                                     <span><?= e((string) $workspaceMember['email']) ?></span>
                                 </div>
-                                <span class="workspace-member-role workspace-role-<?= e((string) $memberRole) ?>"><?= e((string) $memberRoleLabel) ?></span>
                             </li>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </ul>
             </div>
+            <footer class="sidebar-footer">
+                <a
+                    href="workspace-settings.php"
+                    class="icon-gear-button sidebar-settings-button"
+                    aria-label="Configuracoes do workspace"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M10.3 2.6h3.4l.5 2a7.8 7.8 0 0 1 1.9.8l1.8-1 2.4 2.4-1 1.8c.3.6.6 1.2.8 1.9l2 .5v3.4l-2 .5a7.8 7.8 0 0 1-.8 1.9l1 1.8-2.4 2.4-1.8-1a7.8 7.8 0 0 1-1.9.8l-.5 2h-3.4l-.5-2a7.8 7.8 0 0 1-1.9-.8l-1.8 1-2.4-2.4 1-1.8a7.8 7.8 0 0 1-.8-1.9l-2-.5v-3.4l2-.5c.2-.7.5-1.3.8-1.9l-1-1.8 2.4-2.4 1.8 1c.6-.3 1.2-.6 1.9-.8l.5-2Z"></path>
+                        <circle cx="12" cy="12" r="3.2"></circle>
+                    </svg>
+                </a>
+            </footer>
         </aside>
 
         <section class="tasklist-wrap panel" id="tasks">

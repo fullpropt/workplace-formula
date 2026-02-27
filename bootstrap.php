@@ -1253,6 +1253,77 @@ function createWorkspace(PDO $pdo, string $workspaceName, int $createdBy): int
     return $workspaceId;
 }
 
+function updateWorkspaceName(PDO $pdo, int $workspaceId, string $workspaceName): void
+{
+    if ($workspaceId <= 0) {
+        throw new RuntimeException('Workspace invalido.');
+    }
+
+    $trimmed = trim($workspaceName);
+    if ($trimmed === '') {
+        throw new RuntimeException('Informe um nome para o workspace.');
+    }
+
+    $name = normalizeWorkspaceName($trimmed);
+    $stmt = $pdo->prepare(
+        'UPDATE workspaces
+         SET name = :name,
+             updated_at = :updated_at
+         WHERE id = :workspace_id'
+    );
+    $stmt->execute([
+        ':name' => $name,
+        ':updated_at' => nowIso(),
+        ':workspace_id' => $workspaceId,
+    ]);
+}
+
+function workspaceAdminCount(int $workspaceId): int
+{
+    if ($workspaceId <= 0) {
+        return 0;
+    }
+
+    $stmt = db()->prepare(
+        'SELECT COUNT(*)
+         FROM workspace_members
+         WHERE workspace_id = :workspace_id
+           AND role = :role'
+    );
+    $stmt->execute([
+        ':workspace_id' => $workspaceId,
+        ':role' => 'admin',
+    ]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+function removeWorkspaceMember(PDO $pdo, int $workspaceId, int $userId): void
+{
+    if ($workspaceId <= 0 || $userId <= 0) {
+        throw new RuntimeException('Usuario invalido.');
+    }
+
+    $existingRole = workspaceRoleForUser($userId, $workspaceId);
+    if ($existingRole === null) {
+        throw new RuntimeException('Usuario nao pertence a este workspace.');
+    }
+
+    if ($existingRole === 'admin' && workspaceAdminCount($workspaceId) <= 1) {
+        throw new RuntimeException('Mantenha pelo menos um administrador no workspace.');
+    }
+
+    $stmt = $pdo->prepare(
+        'DELETE FROM workspace_members
+         WHERE workspace_id = :workspace_id
+           AND user_id = :user_id'
+    );
+    $stmt->execute([
+        ':workspace_id' => $workspaceId,
+        ':user_id' => $userId,
+    ]);
+}
+
 function workspacesForUser(int $userId): array
 {
     if ($userId <= 0) {
