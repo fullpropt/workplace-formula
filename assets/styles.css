@@ -1242,9 +1242,9 @@ textarea:focus {
 }
 
 .priority-medium {
-    background: rgba(255, 211, 107, 0.12);
-    color: #ffe08a;
-    border-color: rgba(255, 211, 107, 0.24);
+    background: rgba(214, 175, 113, 0.11);
+    color: #e9d2a2;
+    border-color: rgba(214, 175, 113, 0.23);
 }
 
 .priority-high {
@@ -1843,7 +1843,7 @@ textarea:focus {
 }
 
 .priority-select option[value="medium"] {
-    color: #ffe08a;
+    color: #e9d2a2;
 }
 
 .priority-select option[value="high"] {
@@ -1986,7 +1986,7 @@ textarea:focus {
     font-weight: 700;
     font-size: 0.92rem;
     letter-spacing: 0;
-    color: #ffe08a;
+    color: #e9d2a2;
     min-width: 0;
     padding-left: 12px;
     padding-right: 22px;
@@ -2014,9 +2014,9 @@ textarea:focus {
 }
 
 .priority-inline-picker.priority-medium > summary {
-    color: #ffe08a;
-    border-color: rgba(255, 210, 93, 0.2);
-    background: rgba(255, 198, 65, 0.07);
+    color: #e9d2a2;
+    border-color: rgba(214, 175, 113, 0.2);
+    background: rgba(214, 175, 113, 0.07);
 }
 
 .priority-inline-picker.priority-high > summary {
@@ -2046,12 +2046,12 @@ textarea:focus {
 }
 
 .row-inline-picker-option.priority-medium {
-    color: #ffe08a;
+    color: #e9d2a2;
 }
 
 .row-inline-picker-option.priority-medium.is-active {
-    border-color: rgba(255, 210, 93, 0.2);
-    background: rgba(255, 198, 65, 0.08);
+    border-color: rgba(214, 175, 113, 0.2);
+    background: rgba(214, 175, 113, 0.08);
 }
 
 .row-inline-picker-option.priority-high {
@@ -2796,9 +2796,9 @@ textarea:focus {
 }
 
 .task-detail-view-tag.priority-medium {
-    color: #ffe08a;
-    border-color: rgba(255, 210, 93, 0.2);
-    background: rgba(255, 198, 65, 0.07);
+    color: #e9d2a2;
+    border-color: rgba(214, 175, 113, 0.2);
+    background: rgba(214, 175, 113, 0.07);
 }
 
 .task-detail-view-tag.priority-high {

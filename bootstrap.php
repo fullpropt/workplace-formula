@@ -988,9 +988,9 @@ function allTasks(): array
                 t.group_name ASC,
                 CASE t.status
                     WHEN \'done\' THEN 1
-                    WHEN \'todo\' THEN 2
-                    WHEN \'review\' THEN 3
-                    WHEN \'in_progress\' THEN 4
+                    WHEN \'review\' THEN 2
+                    WHEN \'in_progress\' THEN 3
+                    WHEN \'todo\' THEN 4
                     ELSE 5
                 END,
                 CASE t.priority

@@ -82,11 +82,26 @@ window.addEventListener("DOMContentLoaded", () => {
     switch ((status || "").trim()) {
       case "done":
         return 1;
-      case "todo":
-        return 2;
       case "review":
-        return 3;
+        return 2;
       case "in_progress":
+        return 3;
+      case "todo":
+        return 4;
+      default:
+        return 99;
+    }
+  };
+
+  const taskPrioritySortRank = (priority) => {
+    switch ((priority || "").trim()) {
+      case "urgent":
+        return 1;
+      case "high":
+        return 2;
+      case "medium":
+        return 3;
+      case "low":
         return 4;
       default:
         return 99;
@@ -96,6 +111,13 @@ window.addEventListener("DOMContentLoaded", () => {
   const getTaskItemStatusValue = (taskItem) => {
     if (!(taskItem instanceof HTMLElement)) return "";
     const select = taskItem.querySelector("select.status-select");
+    if (!(select instanceof HTMLSelectElement)) return "";
+    return (select.value || "").trim();
+  };
+
+  const getTaskItemPriorityValue = (taskItem) => {
+    if (!(taskItem instanceof HTMLElement)) return "";
+    const select = taskItem.querySelector("select.priority-select");
     if (!(select instanceof HTMLSelectElement)) return "";
     return (select.value || "").trim();
   };
@@ -119,10 +141,12 @@ window.addEventListener("DOMContentLoaded", () => {
       .map((taskItem, index) => ({
         taskItem,
         index,
-        rank: taskStatusSortRank(getTaskItemStatusValue(taskItem)),
+        statusRank: taskStatusSortRank(getTaskItemStatusValue(taskItem)),
+        priorityRank: taskPrioritySortRank(getTaskItemPriorityValue(taskItem)),
       }))
       .sort((a, b) => {
-        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.statusRank !== b.statusRank) return a.statusRank - b.statusRank;
+        if (a.priorityRank !== b.priorityRank) return a.priorityRank - b.priorityRank;
         return a.index - b.index;
       });
 
@@ -299,6 +323,15 @@ window.addEventListener("DOMContentLoaded", () => {
       });
       if (select.value) select.classList.add(`priority-${select.value}`);
       syncInlineSelectPicker(select);
+
+      const taskItem = select.closest("[data-task-item]");
+      if (taskItem instanceof HTMLElement) {
+        const groupSection = taskItem.closest("[data-task-group]");
+        if (groupSection instanceof HTMLElement) {
+          sortGroupTaskItemsByStatus(groupSection);
+          syncGroupStatusDividers(groupSection);
+        }
+      }
     }
   };
 
