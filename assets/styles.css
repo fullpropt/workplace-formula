@@ -1156,10 +1156,10 @@ textarea:focus {
     padding: 10px;
 }
 
-.status-todo { background-image: radial-gradient(circle at 100% 0, rgba(91, 141, 255, 0.15), transparent 40%); }
-.status-in_progress { background-image: radial-gradient(circle at 100% 0, rgba(255, 150, 72, 0.16), transparent 40%); }
-.status-review { background-image: radial-gradient(circle at 100% 0, rgba(177, 116, 255, 0.16), transparent 40%); }
-.status-done { background-image: radial-gradient(circle at 100% 0, rgba(76, 228, 173, 0.16), transparent 40%); }
+.kanban-column.status-todo { background-image: radial-gradient(circle at 100% 0, rgba(91, 141, 255, 0.15), transparent 40%); }
+.kanban-column.status-in_progress { background-image: radial-gradient(circle at 100% 0, rgba(255, 150, 72, 0.16), transparent 40%); }
+.kanban-column.status-review { background-image: radial-gradient(circle at 100% 0, rgba(177, 116, 255, 0.16), transparent 40%); }
+.kanban-column.status-done { background-image: radial-gradient(circle at 100% 0, rgba(76, 228, 173, 0.16), transparent 40%); }
 
 .kanban-column-head {
     display: flex;
@@ -1235,25 +1235,29 @@ textarea:focus {
     border: 1px solid transparent;
 }
 
-.priority-low {
+.badge.priority-low,
+.priority-select.priority-low {
     background: rgba(110, 187, 255, 0.14);
     color: #a7d5ff;
     border-color: rgba(110, 187, 255, 0.28);
 }
 
-.priority-medium {
+.badge.priority-medium,
+.priority-select.priority-medium {
     background: rgba(214, 175, 113, 0.11);
     color: #e9d2a2;
     border-color: rgba(214, 175, 113, 0.23);
 }
 
-.priority-high {
+.badge.priority-high,
+.priority-select.priority-high {
     background: rgba(255, 158, 90, 0.12);
     color: #ffb27f;
     border-color: rgba(255, 158, 90, 0.26);
 }
 
-.priority-urgent {
+.badge.priority-urgent,
+.priority-select.priority-urgent {
     background: rgba(255, 108, 108, 0.13);
     color: #ff9f9f;
     border-color: rgba(255, 108, 108, 0.26);
