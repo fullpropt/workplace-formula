@@ -431,13 +431,64 @@ window.addEventListener("DOMContentLoaded", () => {
     syncTaskDetailDescriptionToolbar();
   });
 
+  window.addEventListener("resize", () => {
+    syncTaskDetailDescriptionToolbar();
+  });
+
+  document.addEventListener(
+    "scroll",
+    () => {
+      syncTaskDetailDescriptionToolbar();
+    },
+    true
+  );
+
   document.addEventListener("mousedown", (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const formatButton = target.closest("[data-task-detail-description-format]");
-    if (!formatButton) return;
-    event.preventDefault();
-    event.stopPropagation();
+    if (!(target instanceof Node)) return;
+
+    if (target instanceof HTMLElement) {
+      const formatButton = target.closest("[data-task-detail-description-format]");
+      if (formatButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
+    if (!(taskDetailEditDescriptionEditor instanceof HTMLElement)) return;
+
+    const clickedEditor = taskDetailEditDescriptionEditor.contains(target);
+    const clickedToolbar =
+      taskDetailEditDescriptionToolbar instanceof HTMLElement &&
+      taskDetailEditDescriptionToolbar.contains(target);
+
+    if (!clickedEditor && !clickedToolbar) {
+      if (taskDetailEditDescriptionToolbar instanceof HTMLElement) {
+        taskDetailEditDescriptionToolbar.hidden = true;
+      }
+      return;
+    }
+
+    if (!clickedEditor) return;
+
+    const range = getTaskDetailDescriptionSelectionRange();
+    if (!range || range.collapsed) return;
+
+    if (selectionRangeContainsPoint(range, event.clientX, event.clientY)) {
+      return;
+    }
+
+    collapseTaskDetailSelectionAtPoint(event.clientX, event.clientY);
+    window.setTimeout(syncTaskDetailDescriptionToolbar, 0);
+  });
+
+  document.addEventListener("mouseup", (event) => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (!(taskDetailEditDescriptionEditor instanceof HTMLElement)) return;
+    if (!taskDetailEditDescriptionEditor.contains(target)) return;
+    window.setTimeout(syncTaskDetailDescriptionToolbar, 0);
   });
 
   document.addEventListener("click", (event) => {
@@ -724,6 +775,83 @@ window.addEventListener("DOMContentLoaded", () => {
     return range;
   };
 
+  const pointInsideRect = (rect, clientX, clientY) =>
+    clientX >= rect.left &&
+    clientX <= rect.right &&
+    clientY >= rect.top &&
+    clientY <= rect.bottom;
+
+  const selectionRangeContainsPoint = (range, clientX, clientY) => {
+    const rects = Array.from(range.getClientRects());
+    if (!rects.length) {
+      const bounds = range.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return false;
+      return pointInsideRect(bounds, clientX, clientY);
+    }
+
+    return rects.some((rect) => pointInsideRect(rect, clientX, clientY));
+  };
+
+  const collapseTaskDetailSelectionAtPoint = (clientX, clientY) => {
+    if (!(taskDetailEditDescriptionEditor instanceof HTMLElement)) return;
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    let nextRange = null;
+
+    if (typeof document.caretRangeFromPoint === "function") {
+      nextRange = document.caretRangeFromPoint(clientX, clientY);
+    } else if (typeof document.caretPositionFromPoint === "function") {
+      const caret = document.caretPositionFromPoint(clientX, clientY);
+      if (caret && caret.offsetNode) {
+        const range = document.createRange();
+        range.setStart(caret.offsetNode, caret.offset);
+        range.collapse(true);
+        nextRange = range;
+      }
+    }
+
+    if (!nextRange) return;
+    if (!taskDetailEditDescriptionEditor.contains(nextRange.startContainer)) return;
+
+    selection.removeAllRanges();
+    selection.addRange(nextRange);
+  };
+
+  const positionTaskDetailDescriptionToolbar = (range) => {
+    if (
+      !(taskDetailEditDescriptionToolbar instanceof HTMLElement) ||
+      !(taskDetailEditDescriptionWrap instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    const selectionRect = range.getBoundingClientRect();
+    if (selectionRect.width <= 0 && selectionRect.height <= 0) {
+      return;
+    }
+
+    const wrapRect = taskDetailEditDescriptionWrap.getBoundingClientRect();
+    const toolbarRect = taskDetailEditDescriptionToolbar.getBoundingClientRect();
+    const margin = 8;
+
+    const centerX = selectionRect.left + selectionRect.width / 2;
+    const rawLeft = centerX - wrapRect.left - toolbarRect.width / 2;
+    const maxLeft = Math.max(margin, wrapRect.width - toolbarRect.width - margin);
+    const left = Math.min(Math.max(rawLeft, margin), maxLeft);
+
+    let top = selectionRect.top - wrapRect.top - toolbarRect.height - 10;
+    if (top < margin) {
+      const rawBottomTop = selectionRect.bottom - wrapRect.top + 10;
+      const maxTop = Math.max(margin, wrapRect.height - toolbarRect.height - margin);
+      top = Math.min(Math.max(rawBottomTop, margin), maxTop);
+    }
+
+    taskDetailEditDescriptionToolbar.style.left = `${Math.round(left)}px`;
+    taskDetailEditDescriptionToolbar.style.top = `${Math.round(top)}px`;
+  };
+
   const setSelectionAtElementStart = (element) => {
     const selection = window.getSelection();
     if (!selection) return;
@@ -745,6 +873,11 @@ window.addEventListener("DOMContentLoaded", () => {
       Boolean(taskDetailModal && !taskDetailModal.hidden && taskDetailModal.classList.contains("is-editing"));
 
     taskDetailEditDescriptionToolbar.hidden = !show;
+    if (!show || !range) {
+      return;
+    }
+
+    positionTaskDetailDescriptionToolbar(range);
   };
 
   const applyTaskDetailDescriptionFormat = (format) => {
@@ -1858,6 +1991,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const taskDetailEditGroup = document.querySelector("[data-task-detail-edit-group]");
   const taskDetailEditDueDate = document.querySelector("[data-task-detail-edit-due-date]");
   const taskDetailEditDescription = document.querySelector("[data-task-detail-edit-description]");
+  const taskDetailEditDescriptionWrap = document.querySelector(
+    "[data-task-detail-edit-description-wrap]"
+  );
   const taskDetailEditDescriptionEditor = document.querySelector(
     "[data-task-detail-edit-description-editor]"
   );
