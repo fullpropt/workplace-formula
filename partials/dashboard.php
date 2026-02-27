@@ -824,12 +824,20 @@
                     <div class="task-detail-edit-references">
                         <label>
                             <span>Links de referencia</span>
-                            <textarea rows="3" data-task-detail-edit-links></textarea>
+                            <textarea
+                                rows="1"
+                                class="task-detail-reference-input"
+                                data-task-detail-edit-links
+                            ></textarea>
                         </label>
 
                         <label>
                             <span>Imagens de referencia</span>
-                            <textarea rows="3" data-task-detail-edit-images></textarea>
+                            <textarea
+                                rows="1"
+                                class="task-detail-reference-input"
+                                data-task-detail-edit-images
+                            ></textarea>
                         </label>
                     </div>
                 </div>

@@ -415,6 +415,28 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (
+      target instanceof HTMLTextAreaElement &&
+      (target.matches("[data-task-detail-edit-links]") ||
+        target.matches("[data-task-detail-edit-images]"))
+    ) {
+      if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      const value = target.value || "";
+      const selectionStart = Number.isFinite(target.selectionStart) ? target.selectionStart : 0;
+      const lineStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+      const rawLineEnd = value.indexOf("\n", selectionStart);
+      const lineEnd = rawLineEnd === -1 ? value.length : rawLineEnd;
+      const currentLine = value.slice(lineStart, lineEnd).trim();
+
+      if (currentLine === "") {
+        event.preventDefault();
+      }
+      return;
+    }
+
     if (!(target instanceof HTMLTextAreaElement)) return;
     if (!target.matches("[data-task-autosave-form] textarea[name=\"description\"]")) {
       return;
@@ -430,6 +452,8 @@ window.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("selectionchange", () => {
     syncTaskDetailDescriptionToolbar();
   });
+
+  let taskDetailFormatButtonPressed = null;
 
   window.addEventListener("resize", () => {
     syncTaskDetailDescriptionToolbar();
@@ -450,11 +474,14 @@ window.addEventListener("DOMContentLoaded", () => {
     if (target instanceof HTMLElement) {
       const formatButton = target.closest("[data-task-detail-description-format]");
       if (formatButton) {
+        taskDetailFormatButtonPressed = formatButton;
         event.preventDefault();
         event.stopPropagation();
         return;
       }
     }
+
+    taskDetailFormatButtonPressed = null;
 
     if (!(taskDetailEditDescriptionEditor instanceof HTMLElement)) return;
 
@@ -498,6 +525,13 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!formatButton) return;
     event.preventDefault();
     event.stopPropagation();
+
+    const keyboardActivation = event.detail === 0;
+    if (!keyboardActivation && taskDetailFormatButtonPressed !== formatButton) {
+      return;
+    }
+
+    taskDetailFormatButtonPressed = null;
     applyTaskDetailDescriptionFormat(formatButton.dataset.taskDetailDescriptionFormat || "bold");
   });
 
