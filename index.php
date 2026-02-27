@@ -308,7 +308,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $groupName = normalizeTaskGroupName((string) ($_POST['group_name'] ?? ''));
                 $existingGroupName = findTaskGroupByName($groupName, $workspaceId);
-                $fallbackGroupName = defaultTaskGroupName($workspaceId);
 
                 if ($existingGroupName === null) {
                     throw new RuntimeException('Grupo nao encontrado.');
@@ -318,90 +317,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new RuntimeException('Este grupo nao pode ser removido.');
                 }
 
-                $countStmt = $pdo->prepare(
-                    'SELECT COUNT(*)
+                $taskIdsStmt = $pdo->prepare(
+                    'SELECT id
                      FROM tasks
                      WHERE workspace_id = :workspace_id
-                       AND group_name = :group_name'
+                       AND LOWER(TRIM(COALESCE(group_name, \'\'))) = LOWER(TRIM(:group_name))'
                 );
-                $countStmt->execute([
+                $taskIdsStmt->execute([
                     ':workspace_id' => $workspaceId,
                     ':group_name' => $existingGroupName,
                 ]);
-                $taskCount = (int) $countStmt->fetchColumn();
-                $movedTaskIds = [];
-                $movedUpdatedAt = nowIso();
-                if ($taskCount > 0) {
-                    $taskIdsStmt = $pdo->prepare(
-                        'SELECT id
-                         FROM tasks
+                $taskIds = array_map('intval', array_column($taskIdsStmt->fetchAll(), 'id'));
+                $taskCount = count($taskIds);
+
+                $pdo->beginTransaction();
+                try {
+                    if ($taskCount > 0) {
+                        $taskPlaceholders = [];
+                        $taskParams = [];
+                        foreach ($taskIds as $index => $taskIdValue) {
+                            $paramName = ':task_id_' . $index;
+                            $taskPlaceholders[] = $paramName;
+                            $taskParams[$paramName] = $taskIdValue;
+                        }
+
+                        $deleteHistorySql = 'DELETE FROM task_history WHERE task_id IN (' . implode(', ', $taskPlaceholders) . ')';
+                        $deleteHistoryStmt = $pdo->prepare($deleteHistorySql);
+                        foreach ($taskParams as $paramName => $paramValue) {
+                            $deleteHistoryStmt->bindValue($paramName, $paramValue, PDO::PARAM_INT);
+                        }
+                        $deleteHistoryStmt->execute();
+                    }
+
+                    $deleteTasksStmt = $pdo->prepare(
+                        'DELETE FROM tasks
                          WHERE workspace_id = :workspace_id
-                           AND group_name = :group_name'
+                           AND LOWER(TRIM(COALESCE(group_name, \'\'))) = LOWER(TRIM(:group_name))'
                     );
-                    $taskIdsStmt->execute([
+                    $deleteTasksStmt->execute([
                         ':workspace_id' => $workspaceId,
                         ':group_name' => $existingGroupName,
                     ]);
-                    $movedTaskIds = array_map(
-                        'intval',
-                        array_column($taskIdsStmt->fetchAll(), 'id')
-                    );
-                }
-                upsertTaskGroup($pdo, $fallbackGroupName, null, $workspaceId);
 
-                if ($taskCount > 0) {
-                    $moveStmt = $pdo->prepare(
-                        'UPDATE tasks
-                         SET group_name = :target_group, updated_at = :updated_at
+                    $deleteGroupStmt = $pdo->prepare(
+                        'DELETE FROM task_groups
                          WHERE workspace_id = :workspace_id
-                           AND group_name = :source_group'
+                           AND LOWER(TRIM(COALESCE(name, \'\'))) = LOWER(TRIM(:name))'
                     );
-                    $moveStmt->execute([
-                        ':target_group' => $fallbackGroupName,
-                        ':updated_at' => $movedUpdatedAt,
+                    $deleteGroupStmt->execute([
                         ':workspace_id' => $workspaceId,
-                        ':source_group' => $existingGroupName,
+                        ':name' => $existingGroupName,
                     ]);
 
-                    foreach ($movedTaskIds as $movedTaskId) {
-                        if ($movedTaskId <= 0) {
-                            continue;
-                        }
-
-                        logTaskHistory(
-                            $pdo,
-                            $movedTaskId,
-                            'group_changed',
-                            ['old' => $existingGroupName, 'new' => $fallbackGroupName],
-                            (int) $authUser['id'],
-                            $movedUpdatedAt
-                        );
+                    if ($deleteGroupStmt->rowCount() <= 0) {
+                        throw new RuntimeException('Nao foi possivel remover o grupo.');
                     }
-                }
 
-                $deleteStmt = $pdo->prepare(
-                    'DELETE FROM task_groups
-                     WHERE workspace_id = :workspace_id
-                       AND name = :name'
-                );
-                $deleteStmt->execute([
-                    ':workspace_id' => $workspaceId,
-                    ':name' => $existingGroupName,
-                ]);
+                    $pdo->commit();
+                } catch (Throwable $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
 
                 if (requestExpectsJson()) {
                     respondJson([
                         'ok' => true,
                         'group_name' => $existingGroupName,
-                        'moved_task_count' => $taskCount,
-                        'moved_to_group' => $fallbackGroupName,
+                        'deleted_task_count' => $taskCount,
+                        'dashboard' => dashboardSummaryPayloadForUser((int) $authUser['id'], $workspaceId),
                     ]);
                 }
 
                 flash(
                     'success',
                     $taskCount > 0
-                        ? sprintf('Grupo removido. Tarefas movidas para %s.', $fallbackGroupName)
+                        ? sprintf('Grupo removido. %d tarefa(s) excluida(s).', $taskCount)
                         : 'Grupo removido.'
                 );
                 redirectTo('index.php#tasks');

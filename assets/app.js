@@ -2117,7 +2117,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const groupTaskCount = Number.parseInt(groupCountText, 10) || 0;
       const message =
         groupTaskCount > 0
-          ? `Remover o grupo ${groupName}? As tarefas serao movidas para ${getDefaultGroupName()}.`
+          ? `Remover o grupo ${groupName}? As tarefas desse grupo tambem serao excluidas.`
           : `Remover o grupo ${groupName}?`;
 
       if (deleteForm instanceof HTMLFormElement) {
@@ -2974,63 +2974,37 @@ window.addEventListener("DOMContentLoaded", () => {
         groupSection?.dataset.groupName?.trim() ||
         deleteForm.querySelector('[name="group_name"]')?.value?.trim() ||
         "Grupo";
-      const movedTaskCount = Number.parseInt(data?.moved_task_count, 10) || 0;
-      const movedToGroup = (data?.moved_to_group || "Geral").trim() || "Geral";
-
-      if (groupSection instanceof HTMLElement && movedTaskCount > 0) {
-        const sourceDropzone = groupSection.querySelector("[data-task-dropzone]");
-        const targetDropzone = document.querySelector(
-          `[data-task-dropzone][data-group-name="${CSS.escape(movedToGroup)}"]`
-        );
-
-        if (
-          sourceDropzone instanceof HTMLElement &&
-          targetDropzone instanceof HTMLElement &&
-          targetDropzone !== sourceDropzone
-        ) {
-          const movedItems = Array.from(
-            sourceDropzone.querySelectorAll("[data-task-item]")
-          );
-
-          movedItems.forEach((taskItem) => {
-            if (!(taskItem instanceof HTMLElement)) return;
-
-            taskItem.dataset.groupName = movedToGroup;
-            const binding = getTaskGroupField(taskItem);
-            if (binding?.field instanceof HTMLSelectElement) {
-              if (!Array.from(binding.field.options).some((opt) => opt.value === movedToGroup)) {
-                const option = document.createElement("option");
-                option.value = movedToGroup;
-                option.textContent = movedToGroup;
-                binding.field.append(option);
-              }
-              binding.field.value = movedToGroup;
-            } else if (binding?.field instanceof HTMLInputElement) {
-              binding.field.value = movedToGroup;
-            }
-
-            targetDropzone.append(taskItem);
-          });
-
-          const targetSection = targetDropzone.closest("[data-task-group]");
-          refreshTaskGroupSection(targetSection);
-        } else if (movedTaskCount > 0) {
-          window.location.reload();
-          return;
-        }
-      }
+      const deletedTaskCount = Number.parseInt(data?.deleted_task_count, 10) || 0;
+      const visibleTaskCountInGroup =
+        groupSection instanceof HTMLElement
+          ? groupSection.querySelectorAll("[data-task-item]").length
+          : 0;
 
       if (groupSection instanceof HTMLElement) {
+        if (
+          taskDetailContext &&
+          taskDetailContext.taskItem instanceof HTMLElement &&
+          groupSection.contains(taskDetailContext.taskItem)
+        ) {
+          closeTaskDetailModal();
+        }
         groupSection.remove();
       }
 
+      if (deletedTaskCount > 0) {
+        adjustBoardSummaryCounts({
+          visible: -visibleTaskCountInGroup,
+          total: -deletedTaskCount,
+        });
+      }
+      renderDashboardSummary(data.dashboard);
       if (typeof syncTaskGroupInputs === "function") {
         syncTaskGroupInputs();
       }
       showClientFlash(
         "success",
-        movedTaskCount > 0
-          ? `Grupo ${groupName} removido. ${movedTaskCount} tarefa(s) movida(s) para ${movedToGroup}.`
+        deletedTaskCount > 0
+          ? `Grupo ${groupName} removido. ${deletedTaskCount} tarefa(s) excluida(s).`
           : `Grupo ${groupName} removido.`
       );
     } catch (error) {
